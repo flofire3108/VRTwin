@@ -115,7 +115,8 @@ _DEFAULT_PERSONA = (
     "stage directions. If you did not catch what someone said, just ask them to "
     "repeat it."
 )
-PERSONA = os.getenv("PERSONA", _DEFAULT_PERSONA)
+# Empty/unset means: use the friendly default persona above (the GUI relies on this).
+PERSONA = os.getenv("PERSONA", "").strip() or _DEFAULT_PERSONA
 
 
 def build_system_prompt() -> str:

@@ -29,11 +29,11 @@ if not exist .venv\.deps_installed (
     echo ok > .venv\.deps_installed
 )
 
-if not exist .env (
-    echo No .env file found. Copy .env.example to .env and fill in your API keys.
-    pause
-    exit /b 1
+REM No arguments: open the control panel GUI. With arguments: run the CLI
+REM (e.g. `run.bat --text` or `run.bat --list-devices`).
+if "%~1"=="" (
+    python gui.py
+) else (
+    python main.py %*
 )
-
-python main.py %*
 pause

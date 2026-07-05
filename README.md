@@ -90,22 +90,50 @@ ignored by the avatar.
 ### 5. Run it
 
 Double-click **`run.bat`**. First run creates a virtual environment and installs
-dependencies (a few minutes), then the bot goes live.
+dependencies (a few minutes), then the **VRTwin control panel** opens.
 
-Useful test commands (run in a terminal in this folder, after the first `run.bat`):
+Then start VRChat, log in with the bot account, join a world — and talk to it.
+
+## Using the control panel
+
+Everything is configured and run from the GUI — no file editing needed:
+
+- **▶ Start avatar / ■ Stop avatar** (top) — saves your settings and starts the bot;
+  its output streams into the **Avatar log** panel at the bottom. Settings changes
+  apply after a restart (Stop, then Start).
+- **Settings tabs** — every option, each with a one-line explanation right under it:
+  - **Keys & Models** — your OpenRouter API key, the brain/ears/voice models, the
+    reasoning switch and the reply-randomness (temperature) field.
+  - **Hearing & Voice** — the microphone-sensitivity and end-of-sentence-pause
+    sliders, echo cancel, sample rates and timeouts.
+  - **Audio Devices** — pick the bot's ears (CABLE-A Output) and mouth (CABLE-B
+    Input) from dropdowns; **↻ Refresh device lists** rescans your hardware.
+  - **VRChat** — OSC address/port, the expression parameter, the expressions JSON,
+    the chatbox toggle and character limit.
+  - **Character** — the AI's name and personality.
+  - **Advanced** — HTTP tuning, history file, voice recorder, debug logging.
+- **💾 Save settings** — validates everything and writes it to `.env` (only values
+  you changed are stored).
+- **↩ Reset to defaults** — puts every option back to its out-of-the-box value
+  (after a confirmation); click Save to make it permanent.
+
+### Command line (advanced)
+
+The engine still works without the GUI:
 
 ```bat
 .venv\Scripts\activate
+python main.py                  REM run the avatar directly
 python main.py --list-devices   REM show audio devices if CABLE-A/B aren't found
 python main.py --text           REM chat with the AI in the console - tests your
                                 REM OpenRouter key and face tags without VRChat/audio
 ```
 
-Then start VRChat, log in with the bot account, join a world — and talk to it.
+`run.bat` with any argument (e.g. `run.bat --text`) also runs the CLI instead of the GUI.
 
 ## Tuning
 
-Everything lives in `.env` (see `.env.example` for all options):
+Adjust these in the GUI (or in `.env` by hand — see `.env.example`):
 
 - **Bot doesn't hear / hears too much** → adjust `VAD_VOLUME_DB_THRESHOLD`
   (closer to 0 = less sensitive, e.g. `-40`; more negative = more sensitive, e.g. `-60`).
