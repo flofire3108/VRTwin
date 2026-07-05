@@ -1,0 +1,7 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+aiavatar.db
+recorded_voices/
