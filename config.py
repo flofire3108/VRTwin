@@ -27,17 +27,18 @@ def _get_bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
-# --- LLM (the brain) — Claude Sonnet 5 via OpenRouter, reasoning disabled ---
+# --- OpenRouter powers everything: brain (LLM), ears (STT) and voice (TTS) ---
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-5")
 
-# --- Voice (ears and mouth) — OpenAI Whisper STT + OpenAI TTS ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-STT_MODEL = os.getenv("STT_MODEL", "gpt-4o-mini-transcribe")
+# --- Voice (ears and mouth) via OpenRouter's audio APIs ---
+STT_MODEL = os.getenv("STT_MODEL", "openai/gpt-4o-transcribe")
 STT_LANGUAGE = os.getenv("STT_LANGUAGE", "en")
-TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
-TTS_VOICE = os.getenv("TTS_VOICE", "nova")
+TTS_MODEL = os.getenv("TTS_MODEL", "google/gemini-3.1-flash-tts-preview")
+TTS_VOICE = os.getenv("TTS_VOICE", "Kore")
+# Gemini 3.1 Flash TTS outputs PCM at 24 kHz / 16-bit / mono.
+TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
 
 # --- Audio devices (VB-CABLE virtual cables) ---
 # INPUT_DEVICE  = where the bot LISTENS  (VRChat's speaker output -> CABLE-A)

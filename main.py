@@ -1,9 +1,11 @@
 """VRTwin - run a VRChat account as an AI avatar.
 
-Pipeline (all wired through AIAvatarKit):
-  VRChat audio -> VB-CABLE A -> voice detection -> OpenAI Whisper (STT)
+Pipeline (all wired through AIAvatarKit, all AI on one OpenRouter key):
+  VRChat audio -> VB-CABLE A -> voice detection
+  -> OpenRouter STT (openai/gpt-4o-transcribe)
   -> Claude Sonnet 5 via OpenRouter (reasoning disabled)
-  -> OpenAI TTS -> VB-CABLE B -> VRChat microphone
+  -> OpenRouter TTS (google/gemini-3.1-flash-tts-preview)
+  -> VB-CABLE B -> VRChat microphone
   plus [face:...] tags -> OSC -> avatar expressions, and replies mirrored
   to the VRChat chatbox.
 
@@ -67,7 +69,7 @@ def list_devices() -> None:
 
 async def text_chat() -> None:
     """Type-to-chat console mode: tests the OpenRouter/Sonnet 5 pipeline and the
-    [face:...] expression tags without VRChat, audio devices, or an OpenAI key."""
+    [face:...] expression tags without VRChat or audio devices."""
     llm = build_llm()
     context_id = "console"
     user_id = "console_user"
@@ -97,24 +99,26 @@ async def run_avatar() -> None:
     from aiavatar.adapter.local.client import AIAvatar
     from aiavatar.device import AudioDevice
     from aiavatar.face.vrchat import VRChatFaceController
-    from aiavatar.sts.stt.openai import OpenAISpeechRecognizer
-    from aiavatar.sts.tts.openai import OpenAISpeechSynthesizer
 
-    if not config.OPENAI_API_KEY:
-        raise SystemExit("OPENAI_API_KEY is not set (needed for speech-to-text and the voice).")
+    from openrouter_audio import OpenRouterSpeechRecognizer, OpenRouterSpeechSynthesizer
 
     app = AIAvatar(
         llm=build_llm(),
-        stt=OpenAISpeechRecognizer(
-            openai_api_key=config.OPENAI_API_KEY,
+        stt=OpenRouterSpeechRecognizer(
+            openrouter_api_key=config.OPENROUTER_API_KEY,
+            base_url=config.OPENROUTER_BASE_URL,
             model=config.STT_MODEL,
             language=config.STT_LANGUAGE,
             sample_rate=16000,
+            debug=config.DEBUG,
         ),
-        tts=OpenAISpeechSynthesizer(
-            openai_api_key=config.OPENAI_API_KEY,
+        tts=OpenRouterSpeechSynthesizer(
+            openrouter_api_key=config.OPENROUTER_API_KEY,
+            base_url=config.OPENROUTER_BASE_URL,
             model=config.TTS_MODEL,
-            speaker=config.TTS_VOICE,
+            voice=config.TTS_VOICE,
+            pcm_sample_rate=config.TTS_SAMPLE_RATE,
+            debug=config.DEBUG,
         ),
         face_controller=VRChatFaceController(
             osc_address=config.FACE_OSC_ADDRESS,

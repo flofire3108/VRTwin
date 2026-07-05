@@ -1,23 +1,25 @@
 # VRTwin — an AI that plays VRChat
 
 VRTwin logs a VRChat account in as a living AI character. It **hears** the players
-around it, **thinks** with Claude Sonnet 5 through [OpenRouter](https://openrouter.ai)
-(reasoning disabled for fast, cheap replies), **talks back** with a natural
+around it, **thinks** with Claude Sonnet 5, **talks back** with a natural
 text-to-speech voice, shows its replies in the **chatbox**, and plays **custom facial
 expressions** on the avatar — powered by
 [AIAvatarKit](https://github.com/uezo/aiavatarkit) and VRChat's OSC interface.
+All three AI stages (hearing, thinking, speaking) run through a **single
+[OpenRouter](https://openrouter.ai) API key**.
 
 ```
-player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text (OpenAI Whisper)
+player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text
+                                            (openai/gpt-4o-transcribe via OpenRouter)
                                               │
                                               ▼
                               Claude Sonnet 5 via OpenRouter (no reasoning)
                                               │  reply text + [face:joy] tags
                           ┌───────────────────┼──────────────────────┐
                           ▼                   ▼                      ▼
-                 OpenAI TTS voice     OSC /avatar/parameters   OSC /chatbox/input
-                 ─► CABLE-B ─►        (facial expression)      (text bubble)
-                 VRChat microphone
+              Gemini 3.1 Flash TTS    OSC /avatar/parameters   OSC /chatbox/input
+              (via OpenRouter)        (facial expression)      (text bubble)
+              ─► CABLE-B ─► VRChat microphone
 ```
 
 ## What you need
@@ -28,11 +30,7 @@ player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text (OpenAI W
 | Python 3.10 – 3.12 | runs the script | [python.org](https://www.python.org/downloads/) — tick **"Add python.exe to PATH"** |
 | VB-CABLE **A+B** | two virtual audio cables between VRChat and the bot | [VB-Audio Cable A+B](https://vb-audio.com/Cable/#DownloadASIOBridge) (donationware) |
 | A VRChat account for the bot | the AI needs its own account/avatar | ideally a second account so you can join it with your main |
-| OpenRouter API key | the brain (Claude Sonnet 5) | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
-| OpenAI API key | the ears (Whisper) + the voice (TTS) | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-
-> OpenRouter only provides chat models — it has no speech endpoints — which is why a
-> second (OpenAI) key handles hearing and speaking.
+| OpenRouter API key | brain (Claude Sonnet 5) + ears (gpt-4o-transcribe) + voice (Gemini 3.1 Flash TTS) | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
 
 ## Setup
 
@@ -42,7 +40,7 @@ player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text (OpenAI W
 2. Install **VB-CABLE A+B** (run the installer as administrator, then reboot).
    After the reboot you'll have `CABLE-A` and `CABLE-B` audio devices.
 3. Download/clone this repository somewhere, e.g. `C:\VRTwin`.
-4. Copy `.env.example` to `.env` and paste in your two API keys.
+4. Copy `.env.example` to `.env` and paste in your OpenRouter API key.
 
 ### 2. Route the audio (the important part)
 
@@ -100,7 +98,7 @@ Useful test commands (run in a terminal in this folder, after the first `run.bat
 .venv\Scripts\activate
 python main.py --list-devices   REM show audio devices if CABLE-A/B aren't found
 python main.py --text           REM chat with the AI in the console - tests your
-                                REM OpenRouter key and face tags without VRChat
+                                REM OpenRouter key and face tags without VRChat/audio
 ```
 
 Then start VRChat, log in with the bot account, join a world — and talk to it.
@@ -111,9 +109,12 @@ Everything lives in `.env` (see `.env.example` for all options):
 
 - **Bot doesn't hear / hears too much** → adjust `VAD_VOLUME_DB_THRESHOLD`
   (closer to 0 = less sensitive, e.g. `-40`; more negative = more sensitive, e.g. `-60`).
-- **Different voice** → `TTS_VOICE` (`alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`, ...).
+- **Different voice** → `TTS_VOICE` — Gemini prebuilt voices like `Kore`, `Puck`,
+  `Zephyr`, `Charon`, `Fenrir`, `Leda`, `Orus`, `Aoede`.
 - **Personality** → `PERSONA` and `CHARACTER_NAME`.
-- **Another model** → `OPENROUTER_MODEL` (any OpenRouter chat model id works).
+- **Other models** → `OPENROUTER_MODEL` (brain), `STT_MODEL` (ears), `TTS_MODEL`
+  (voice) — any matching OpenRouter model ids work. If you switch to a TTS model
+  that doesn't output 24 kHz PCM, set `TTS_SAMPLE_RATE` accordingly.
 - **Other language** → `STT_LANGUAGE` (e.g. `nl`) and mention the language in `PERSONA`.
 
 ## Troubleshooting
@@ -126,8 +127,10 @@ Everything lives in `.env` (see `.env.example` for all options):
 - **Bot answers itself in a loop** — VRChat's mic is set to the wrong device, or its
   output isn't routed to CABLE-A (step 2). Echo cancellation is on by default, but
   correct routing is required.
-- **401 errors** — check the matching key: OpenRouter errors mention `openrouter.ai`,
-  Whisper/TTS errors mention `api.openai.com`.
+- **401 errors** — your OpenRouter key is wrong or out of credits; everything
+  (chat, transcription, speech) authenticates against `openrouter.ai`.
+- **Bot hears but stays silent** — run with `DEBUG=true` and check for TTS errors;
+  if the voice name is rejected, try another Gemini voice in `TTS_VOICE`.
 
 ## Notes
 
