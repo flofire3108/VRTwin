@@ -109,13 +109,23 @@ Everything lives in `.env` (see `.env.example` for all options):
 
 - **Bot doesn't hear / hears too much** → adjust `VAD_VOLUME_DB_THRESHOLD`
   (closer to 0 = less sensitive, e.g. `-40`; more negative = more sensitive, e.g. `-60`).
+  `VAD_SILENCE_DURATION_THRESHOLD` controls how long a pause has to be before
+  the bot considers you done talking.
 - **Different voice** → `TTS_VOICE` — Gemini prebuilt voices like `Kore`, `Puck`,
   `Zephyr`, `Charon`, `Fenrir`, `Leda`, `Orus`, `Aoede`.
-- **Personality** → `PERSONA` and `CHARACTER_NAME`.
+- **Personality** → `PERSONA`, `CHARACTER_NAME` and `OPENROUTER_TEMPERATURE`
+  (higher = more varied replies).
+- **Smarter but slower replies** → `OPENROUTER_REASONING_ENABLED=true` turns
+  Claude's reasoning back on.
 - **Other models** → `OPENROUTER_MODEL` (brain), `STT_MODEL` (ears), `TTS_MODEL`
   (voice) — any matching OpenRouter model ids work. If you switch to a TTS model
   that doesn't output 24 kHz PCM, set `TTS_SAMPLE_RATE` accordingly.
 - **Other language** → `STT_LANGUAGE` (e.g. `nl`) and mention the language in `PERSONA`.
+- **Running more than one bot on the same PC** → give each its own
+  `DB_CONNECTION_STR` (conversation history file) so they don't share history.
+- **Every setting** lives in `.env.example`, including HTTP timeouts, connection
+  pool sizes, the voice recorder, and the chatbox character limit — copy any
+  line you need into `.env`.
 
 ## Troubleshooting
 

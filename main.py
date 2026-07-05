@@ -43,7 +43,9 @@ def build_llm() -> ChatGPTService:
         base_url=config.OPENROUTER_BASE_URL,
         model=config.OPENROUTER_MODEL,
         system_prompt=config.build_system_prompt(),
-        extra_body={"reasoning": {"enabled": False}},
+        temperature=config.OPENROUTER_TEMPERATURE,
+        extra_body={"reasoning": {"enabled": config.OPENROUTER_REASONING_ENABLED}},
+        db_connection_str=config.DB_CONNECTION_STR,
         debug=config.DEBUG,
     )
 
@@ -109,7 +111,11 @@ async def run_avatar() -> None:
             base_url=config.OPENROUTER_BASE_URL,
             model=config.STT_MODEL,
             language=config.STT_LANGUAGE,
-            sample_rate=16000,
+            sample_rate=config.AUDIO_SAMPLE_RATE,
+            min_data_length=config.STT_MIN_DATA_LENGTH,
+            max_connections=config.HTTP_MAX_CONNECTIONS,
+            max_keepalive_connections=config.HTTP_MAX_KEEPALIVE_CONNECTIONS,
+            timeout=config.STT_TIMEOUT,
             debug=config.DEBUG,
         ),
         tts=OpenRouterSpeechSynthesizer(
@@ -118,11 +124,16 @@ async def run_avatar() -> None:
             model=config.TTS_MODEL,
             voice=config.TTS_VOICE,
             pcm_sample_rate=config.TTS_SAMPLE_RATE,
+            max_connections=config.HTTP_MAX_CONNECTIONS,
+            max_keepalive_connections=config.HTTP_MAX_KEEPALIVE_CONNECTIONS,
+            timeout=config.TTS_TIMEOUT,
+            cache_dir=config.TTS_CACHE_DIR,
             debug=config.DEBUG,
         ),
         face_controller=VRChatFaceController(
             osc_address=config.FACE_OSC_ADDRESS,
             faces=config.FACES,
+            neutral_key=config.FACE_NEUTRAL_KEY,
             host=config.OSC_HOST,
             port=config.OSC_PORT,
             debug=config.DEBUG,
@@ -132,8 +143,12 @@ async def run_avatar() -> None:
             output_device=config.OUTPUT_DEVICE,
         ),
         vad_volume_db_threshold=config.VAD_VOLUME_DB_THRESHOLD,
-        cancel_echo=True,  # don't listen to the bot's own voice
-        voice_recorder_enabled=False,
+        vad_silence_duration_threshold=config.VAD_SILENCE_DURATION_THRESHOLD,
+        vad_sample_rate=config.AUDIO_SAMPLE_RATE,
+        cancel_echo=config.CANCEL_ECHO,
+        voice_recorder_enabled=config.VOICE_RECORDER_ENABLED,
+        voice_recorder_dir=config.VOICE_RECORDER_DIR,
+        db_connection_str=config.DB_CONNECTION_STR,
         debug=config.DEBUG,
     )
     app.charactername = config.CHARACTER_NAME
@@ -144,8 +159,10 @@ async def run_avatar() -> None:
     @app.on_response("final")
     async def mirror_to_chatbox(response):
         if config.CHATBOX_ENABLED and response.voice_text:
-            # /chatbox/input: [text (max 144 chars), send immediately, no notification sound]
-            chatbox.send_message("/chatbox/input", [response.voice_text[:144], True, False])
+            # /chatbox/input: [text, send immediately, no notification sound]
+            chatbox.send_message(
+                "/chatbox/input", [response.voice_text[: config.CHATBOX_MAX_LENGTH], True, False]
+            )
 
     print(f"{config.CHARACTER_NAME} is live. Listening on '{config.INPUT_DEVICE}', "
           f"speaking on '{config.OUTPUT_DEVICE}', OSC -> {config.OSC_HOST}:{config.OSC_PORT}. "
