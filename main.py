@@ -57,7 +57,8 @@ def list_devices() -> None:
     devices = [p.get_device_info_by_index(i) for i in range(p.get_device_count())]
     p.terminate()
     if not devices:
-        print("No audio devices found. Is VB-CABLE A+B installed (and did you reboot)?")
+        print("No audio devices found. Are the virtual audio cables installed?")
+        print("(Windows: VB-CABLE A+B, then reboot. Linux: run via ./run.sh. macOS: BlackHole.)")
         return
     print("==== Input devices (pick the one for INPUT_DEVICE, e.g. CABLE-A Output) ====")
     for i, d in enumerate(devices):

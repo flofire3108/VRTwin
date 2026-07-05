@@ -26,9 +26,9 @@ player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text
 
 | Thing | Why | Where |
 |---|---|---|
-| Windows 10/11 PC | runs VRChat + this script | — |
-| Python 3.10 – 3.12 | runs the script | [python.org](https://www.python.org/downloads/) — tick **"Add python.exe to PATH"** |
-| VB-CABLE **A+B** | two virtual audio cables between VRChat and the bot | [VB-Audio Cable A+B](https://vb-audio.com/Cable/#DownloadASIOBridge) (donationware) |
+| A PC that runs VRChat | **Windows 10/11** (native) or **Linux** (via Steam Proton). macOS has no VRChat client — see [Platform notes](#platform-notes) | — |
+| Python 3.10 – 3.12 | runs the script | [python.org](https://www.python.org/downloads/) or your package manager |
+| Two virtual audio cables | carry sound between VRChat and the bot | Windows: [VB-CABLE A+B](https://vb-audio.com/Cable/#DownloadASIOBridge) (donationware) · Linux: created automatically by `run.sh` · macOS: [BlackHole](https://existential.audio/blackhole/) 2ch + 16ch |
 | A VRChat account for the bot | the AI needs its own account/avatar | ideally a second account so you can join it with your main |
 | OpenRouter API key | brain (Claude Sonnet 5) + ears (gpt-4o-transcribe) + voice (Gemini 3.1 Flash TTS) | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
 
@@ -36,28 +36,69 @@ player speaks ─► VRChat audio ─► CABLE-A ─► speech-to-text
 
 ### 1. Install the software
 
+**Windows**
+
 1. Install Python 3.10–3.12 (**tick "Add python.exe to PATH"**).
 2. Install **VB-CABLE A+B** (run the installer as administrator, then reboot).
    After the reboot you'll have `CABLE-A` and `CABLE-B` audio devices.
 3. Download/clone this repository somewhere, e.g. `C:\VRTwin`.
-4. Copy `.env.example` to `.env` and paste in your OpenRouter API key.
+
+**Linux**
+
+1. Install the prerequisites, e.g. on Debian/Ubuntu:
+   `sudo apt install python3 python3-venv python3-tk python3-dev portaudio19-dev`
+   (PyAudio compiles against PortAudio; the GUI needs Tk.)
+2. Clone this repository. `./run.sh` handles the rest, including creating the
+   two virtual audio cables (`VRTwin-Ears`, `VRTwin-Voice`) via PulseAudio/PipeWire.
+
+**macOS**
+
+1. `brew install python python-tk portaudio blackhole-2ch blackhole-16ch`
+   (the two BlackHole drivers are the two "cables").
+2. Clone this repository and use `./run.sh`.
 
 ### 2. Route the audio (the important part)
 
-Two one-way cables:
+Two one-way cables: cable A carries VRChat's sound to the bot's ears, cable B
+carries the bot's voice to VRChat's microphone.
+
+**Windows (VB-CABLE)**
 
 | Cable | Carries | How to set it |
 |---|---|---|
 | **CABLE-A** | VRChat's sound → the bot's ears | Windows Settings → System → Sound → **App volume and device preferences** → set **VRChat**'s *Output* to **CABLE-A Input (VB-Audio Cable A)** |
 | **CABLE-B** | the bot's voice → VRChat's mic | In VRChat: Settings → Audio & Voice → *Microphone* → **CABLE-B Output (VB-Audio Cable B)** |
 
+**Linux (PulseAudio/PipeWire)**
+
+`./run.sh` creates two virtual cables at every launch: **VRTwin-Ears** and
+**VRTwin-Voice** (the bot is wired to them out of the box via `PULSE_SOURCE`/
+`PULSE_SINK`). Route VRChat to them with `pavucontrol` (install it if needed)
+while VRChat is running:
+
+| Cable | Carries | How to set it (pavucontrol) |
+|---|---|---|
+| **VRTwin-Ears** | VRChat's sound → the bot's ears | *Playback* tab → set VRChat's output to **VRTwin-Ears** |
+| **VRTwin-Voice** | the bot's voice → VRChat's mic | *Recording* tab → set VRChat's capture to **Monitor of VRTwin-Voice** |
+
+The cables disappear on reboot — `./run.sh` simply recreates them next launch
+(re-check the pavucontrol routing after a reboot too).
+
+**macOS (BlackHole)**
+
+| Cable | Carries | How to set it |
+|---|---|---|
+| **BlackHole 2ch** | the game's sound → the bot's ears | set the game/app's audio output to **BlackHole 2ch** |
+| **BlackHole 16ch** | the bot's voice → the game's mic | set the game/app's microphone to **BlackHole 16ch** |
+
 Also in VRChat: set the microphone to **Toggle** mode and leave it on, so the bot's
 voice always transmits.
 
-> Tip: with VRChat's output routed to CABLE-A you won't hear the world on your
+> Tip: with VRChat's output routed to cable A you won't hear the world on your
 > headphones anymore — that's expected for a dedicated bot PC/account. If you want to
-> listen in, enable "Listen to this device" on CABLE-A in the Windows sound control
-> panel, or just join the instance with your main account from another device.
+> listen in, enable "Listen to this device" on the cable (Windows sound control
+> panel) / play the cable's monitor to your headphones (pavucontrol on Linux), or
+> just join the instance with your main account from another device.
 
 ### 3. Enable OSC in VRChat
 
@@ -89,8 +130,9 @@ ignored by the avatar.
 
 ### 5. Run it
 
-Double-click **`run.bat`**. First run creates a virtual environment and installs
-dependencies (a few minutes), then the **VRTwin control panel** opens.
+Double-click **`run.bat`** (Windows) or run **`./run.sh`** (Linux/macOS). First run
+creates a virtual environment and installs dependencies (a few minutes), then the
+**VRTwin control panel** opens.
 
 Then start VRChat, log in with the bot account, join a world — and talk to it.
 
@@ -106,8 +148,8 @@ Everything is configured and run from the GUI — no file editing needed:
     reasoning switch and the reply-randomness (temperature) field.
   - **Hearing & Voice** — the microphone-sensitivity and end-of-sentence-pause
     sliders, echo cancel, sample rates and timeouts.
-  - **Audio Devices** — pick the bot's ears (CABLE-A Output) and mouth (CABLE-B
-    Input) from dropdowns; **↻ Refresh device lists** rescans your hardware.
+  - **Audio Devices** — pick the bot's ears and mouth (the two virtual cables)
+    from dropdowns; **↻ Refresh device lists** rescans your hardware.
   - **VRChat** — OSC address/port, the expression parameter, the expressions JSON,
     the chatbox toggle and character limit.
   - **Character** — the AI's name and personality.
@@ -122,14 +164,15 @@ Everything is configured and run from the GUI — no file editing needed:
 The engine still works without the GUI:
 
 ```bat
-.venv\Scripts\activate
+.venv\Scripts\activate          REM Linux/macOS: source .venv/bin/activate
 python main.py                  REM run the avatar directly
-python main.py --list-devices   REM show audio devices if CABLE-A/B aren't found
+python main.py --list-devices   REM show audio devices if the cables aren't found
 python main.py --text           REM chat with the AI in the console - tests your
                                 REM OpenRouter key and face tags without VRChat/audio
 ```
 
-`run.bat` with any argument (e.g. `run.bat --text`) also runs the CLI instead of the GUI.
+`run.bat`/`./run.sh` with any argument (e.g. `run.bat --text` or `./run.sh --text`)
+also runs the CLI instead of the GUI.
 
 ## Tuning
 
@@ -155,15 +198,36 @@ Adjust these in the GUI (or in `.env` by hand — see `.env.example`):
   pool sizes, the voice recorder, and the chatbox character limit — copy any
   line you need into `.env`.
 
+## Platform notes
+
+- **Windows** — native VRChat; fully supported with VB-CABLE A+B.
+- **Linux** — VRChat runs well through **Steam Proton** (install VRChat in Steam,
+  enable Proton in its compatibility settings); fully supported with the
+  auto-created PulseAudio/PipeWire cables. Works on both PulseAudio and PipeWire
+  (`pactl` talks to either).
+- **macOS** — there is **no VRChat client for macOS**, so a Mac cannot run the
+  bot's VRChat account itself. Everything else works: the control panel, console
+  chat (`./run.sh --text`), and the full audio pipeline via BlackHole — useful for
+  developing, testing personas, or driving other audio apps. (OSC can reach VRChat
+  on another machine via `OSC_HOST`, but the audio cables cannot cross machines
+  without extra tooling.)
+
 ## Troubleshooting
 
-- **`CABLE-A` not found on startup** — run `python main.py --list-devices` and put the
-  exact index or name in `.env` (`INPUT_DEVICE` must be the *"CABLE-A **Output**"*
-  recording device, `OUTPUT_DEVICE` the *"CABLE-B **Input**"* playback device).
+- **Audio cable not found on startup** — run `python main.py --list-devices` and put
+  the exact index or name in the GUI's Audio Devices tab (or `.env`). On Windows,
+  `INPUT_DEVICE` must be the *"CABLE-A **Output**"* recording device and
+  `OUTPUT_DEVICE` the *"CABLE-B **Input**"* playback device.
+- **`pip install` fails on PyAudio (Linux/macOS)** — install the PortAudio headers
+  first (`sudo apt install portaudio19-dev python3-dev` / `brew install portaudio`),
+  delete `.venv`, and run `./run.sh` again.
+- **Linux: bot hears nothing after a reboot** — the virtual cables are recreated by
+  `./run.sh`, but VRChat's routing resets: re-select **VRTwin-Ears** (Playback) and
+  **Monitor of VRTwin-Voice** (Recording) in `pavucontrol`.
 - **Bot talks but no expressions / no chatbox** — OSC is disabled (step 3), or VRChat
   runs on another PC (set `OSC_HOST`).
 - **Bot answers itself in a loop** — VRChat's mic is set to the wrong device, or its
-  output isn't routed to CABLE-A (step 2). Echo cancellation is on by default, but
+  output isn't routed to cable A (step 2). Echo cancellation is on by default, but
   correct routing is required.
 - **401 errors** — your OpenRouter key is wrong or out of credits; everything
   (chat, transcription, speech) authenticates against `openrouter.ai`.

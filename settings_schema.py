@@ -13,6 +13,8 @@ from typing import List, Optional
 
 from dotenv import dotenv_values, set_key, unset_key
 
+import platform_defaults
+
 ENV_PATH = Path(__file__).parent / ".env"
 
 # Widget kinds understood by the GUI:
@@ -97,12 +99,14 @@ SETTINGS: List[Setting] = [
             "Folder to cache spoken lines so repeated replies are not re-synthesized. Empty = caching off.",
             "Hearing & Voice", placeholder="(disabled)"),
 
-    # --- Audio Devices ---
-    Setting("INPUT_DEVICE", "CABLE-A", "device_in", "Bot's ears (input device)",
-            "The recording device that carries VRChat's sound to the bot - normally 'CABLE-A Output'. A device index number also works.",
+    # --- Audio Devices (defaults depend on the OS, see platform_defaults.py) ---
+    Setting("INPUT_DEVICE", platform_defaults.DEFAULT_INPUT_DEVICE, "device_in",
+            "Bot's ears (input device)",
+            platform_defaults.INPUT_DEVICE_HELP,
             "Audio Devices"),
-    Setting("OUTPUT_DEVICE", "CABLE-B", "device_out", "Bot's mouth (output device)",
-            "The playback device that carries the bot's voice to VRChat's microphone - normally 'CABLE-B Input'. A device index number also works.",
+    Setting("OUTPUT_DEVICE", platform_defaults.DEFAULT_OUTPUT_DEVICE, "device_out",
+            "Bot's mouth (output device)",
+            platform_defaults.OUTPUT_DEVICE_HELP,
             "Audio Devices"),
 
     # --- VRChat ---
@@ -156,6 +160,12 @@ SETTINGS: List[Setting] = [
     Setting("VOICE_RECORDER_DIR", "recorded_voices", "text", "Voice recordings folder",
             "Where the recorded WAV files go when the recorder is on.",
             "Advanced"),
+    Setting("PULSE_SOURCE", platform_defaults.DEFAULT_PULSE_SOURCE, "text", "Pulse source (Linux)",
+            "Linux only: which PulseAudio/PipeWire source the 'pulse' input device uses. run.sh creates 'vrtwin_ears.monitor'. Empty = system default microphone.",
+            "Advanced", placeholder="(system default)"),
+    Setting("PULSE_SINK", platform_defaults.DEFAULT_PULSE_SINK, "text", "Pulse sink (Linux)",
+            "Linux only: which PulseAudio/PipeWire sink the 'pulse' output device uses. run.sh creates 'vrtwin_voice'. Empty = system default speakers.",
+            "Advanced", placeholder="(system default)"),
     Setting("DEBUG", "false", "bool", "Debug logging",
             "Verbose logs for every pipeline step. Turn on when troubleshooting.",
             "Advanced"),

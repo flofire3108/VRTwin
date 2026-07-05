@@ -18,6 +18,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+import platform_defaults
 import settings_schema as schema
 
 ctk.set_appearance_mode("dark")
@@ -200,7 +201,8 @@ class VRTwinApp(ctk.CTk):
         log_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(log_frame, text="Avatar log", font=ctk.CTkFont(size=12, weight="bold"),
                      anchor="w").grid(row=0, column=0, sticky="ew", padx=10, pady=(6, 0))
-        self.log_box = ctk.CTkTextbox(log_frame, wrap="word", font=ctk.CTkFont(family="Consolas", size=11))
+        self.log_box = ctk.CTkTextbox(log_frame, wrap="word",
+                                      font=ctk.CTkFont(family=platform_defaults.MONO_FONT, size=11))
         self.log_box.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         self.log_box.configure(state="disabled")
 

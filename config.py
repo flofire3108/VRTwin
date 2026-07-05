@@ -10,6 +10,8 @@ from typing import Union
 
 from dotenv import load_dotenv
 
+import platform_defaults
+
 load_dotenv()
 
 
@@ -61,11 +63,23 @@ TTS_CACHE_DIR = os.getenv("TTS_CACHE_DIR", "").strip() or None
 HTTP_MAX_CONNECTIONS = int(os.getenv("HTTP_MAX_CONNECTIONS", "100"))
 HTTP_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("HTTP_MAX_KEEPALIVE_CONNECTIONS", "20"))
 
-# --- Audio devices (VB-CABLE virtual cables) ---
-# INPUT_DEVICE  = where the bot LISTENS  (VRChat's speaker output -> CABLE-A)
-# OUTPUT_DEVICE = where the bot SPEAKS   (CABLE-B -> VRChat's microphone)
-INPUT_DEVICE = _get_device("INPUT_DEVICE", "CABLE-A")
-OUTPUT_DEVICE = _get_device("OUTPUT_DEVICE", "CABLE-B")
+# --- Audio devices (virtual audio cables; defaults depend on the OS) ---
+# INPUT_DEVICE  = where the bot LISTENS  (the game's speaker output -> cable A)
+# OUTPUT_DEVICE = where the bot SPEAKS   (cable B -> the game's microphone)
+# Windows: VB-CABLE A/B. macOS: BlackHole 2ch/16ch. Linux: the "pulse" device,
+# with the concrete virtual devices picked via PULSE_SOURCE/PULSE_SINK below.
+INPUT_DEVICE = _get_device("INPUT_DEVICE", platform_defaults.DEFAULT_INPUT_DEVICE)
+OUTPUT_DEVICE = _get_device("OUTPUT_DEVICE", platform_defaults.DEFAULT_OUTPUT_DEVICE)
+
+# Linux only: which PulseAudio/PipeWire source/sink the "pulse" device maps to.
+# run.sh creates the vrtwin_ears/vrtwin_voice null sinks. Empty = system default.
+PULSE_SOURCE = os.getenv("PULSE_SOURCE", platform_defaults.DEFAULT_PULSE_SOURCE)
+PULSE_SINK = os.getenv("PULSE_SINK", platform_defaults.DEFAULT_PULSE_SINK)
+# libpulse reads these from the environment when the audio streams open.
+if PULSE_SOURCE:
+    os.environ["PULSE_SOURCE"] = PULSE_SOURCE
+if PULSE_SINK:
+    os.environ["PULSE_SINK"] = PULSE_SINK
 # Sample rate used to capture audio for voice detection and speech-to-text.
 AUDIO_SAMPLE_RATE = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
 
