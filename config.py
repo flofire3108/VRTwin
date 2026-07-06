@@ -44,6 +44,12 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-5")
 OPENROUTER_REASONING_ENABLED = _get_bool("OPENROUTER_REASONING_ENABLED", False)
 # Unset by default (provider default applies). 0 = deterministic, ~1-1.5 = more varied replies.
 OPENROUTER_TEMPERATURE = _get_optional_float("OPENROUTER_TEMPERATURE")
+# Hard cap on reply length (tokens). Keeps spoken replies short, fast and cheap.
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "200"))
+# The reply is spoken in chunks; a chunk is flushed to TTS early once it passes
+# this many characters at a natural pause. Lower = the avatar starts talking
+# sooner, in smaller pieces.
+LLM_OPTION_SPLIT_THRESHOLD = int(os.getenv("LLM_OPTION_SPLIT_THRESHOLD", "24"))
 
 # --- Voice (ears and mouth) via OpenRouter's audio APIs ---
 STT_MODEL = os.getenv("STT_MODEL", "openai/gpt-4o-transcribe")
@@ -100,6 +106,11 @@ VOICE_RECORDER_DIR = os.getenv("VOICE_RECORDER_DIR", "recorded_voices")
 
 # SQLite file used for conversation history. Change for multiple bot instances.
 DB_CONNECTION_STR = os.getenv("DB_CONNECTION_STR", "aiavatar.db")
+# How many past messages the brain sees each reply. Lower = cheaper, faster and
+# less likely to mix up different players; higher = longer memory.
+HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "30"))
+# Forget conversation history older than this many seconds. 0 = no time limit.
+HISTORY_TIMEOUT_SECONDS = int(os.getenv("HISTORY_TIMEOUT_SECONDS", "3600"))
 
 # --- VRChat OSC ---
 OSC_HOST = os.getenv("OSC_HOST", "127.0.0.1")

@@ -27,27 +27,40 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="aiavatar"
 from aiavatar.sts.llm.chatgpt import ChatGPTService
 
 import config
+from context_manager import LimitedSQLiteContextManager
 
 
 def build_llm() -> ChatGPTService:
     """Claude Sonnet 5 through OpenRouter's OpenAI-compatible endpoint.
 
     OpenRouter's `reasoning` body parameter is sent via extra_body to turn
-    Claude's thinking off entirely, so replies come back fast and cheap.
+    Claude's thinking off entirely, so replies come back fast and cheap. History
+    is capped and replies are length-limited to keep the voice loop snappy.
     """
     if not config.OPENROUTER_API_KEY:
         raise SystemExit("OPENROUTER_API_KEY is not set. Copy .env.example to .env and fill it in.")
 
-    return ChatGPTService(
+    llm = ChatGPTService(
         openai_api_key=config.OPENROUTER_API_KEY,
         base_url=config.OPENROUTER_BASE_URL,
         model=config.OPENROUTER_MODEL,
         system_prompt=config.build_system_prompt(),
         temperature=config.OPENROUTER_TEMPERATURE,
         extra_body={"reasoning": {"enabled": config.OPENROUTER_REASONING_ENABLED}},
-        db_connection_str=config.DB_CONNECTION_STR,
+        context_manager=LimitedSQLiteContextManager(
+            db_path=config.DB_CONNECTION_STR,
+            context_timeout=config.HISTORY_TIMEOUT_SECONDS,
+            max_messages=config.HISTORY_MAX_MESSAGES,
+        ),
+        option_split_threshold=config.LLM_OPTION_SPLIT_THRESHOLD,
         debug=config.DEBUG,
     )
+
+    @llm.edit_chat_completion_params
+    def _cap_max_tokens(params, context_id, user_id):
+        params["max_tokens"] = config.LLM_MAX_TOKENS
+
+    return llm
 
 
 def list_devices() -> None:
