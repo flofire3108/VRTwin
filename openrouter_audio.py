@@ -67,6 +67,7 @@ class OpenRouterSpeechRecognizer(SpeechRecognizer):
             return None
 
         wave_buffer = self.to_wave_file(data, self.sample_rate)
+        provider_prefix = self.model.split("/")[0] if "/" in self.model else None
         json_body = {
             "model": self.model,
             "input_audio": {
@@ -74,6 +75,8 @@ class OpenRouterSpeechRecognizer(SpeechRecognizer):
                 "format": "wav",
             },
         }
+        if provider_prefix:
+            json_body["provider"] = {"order": [provider_prefix]}
         if self.language and not self.alternative_languages:
             # OpenRouter expects an ISO-639-1 hint, e.g. "en"
             json_body["language"] = self.language.split("-")[0]
@@ -160,12 +163,15 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
 
         url = f"{self.base_url}/audio/speech"
         headers = {"Authorization": f"Bearer {self.openrouter_api_key}"}
+        provider_prefix = self.model.split("/")[0] if "/" in self.model else None
         json_body = {
             "model": self.model,
             "input": processed_text,
             "voice": self.voice,
             "response_format": "pcm",
         }
+        if provider_prefix:
+            json_body["provider"] = {"order": [provider_prefix]}
 
         cache_key = self.make_cache_key(url=url, json_body=json_body)
         if cached := await self.read_cache(cache_key):
