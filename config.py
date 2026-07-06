@@ -49,7 +49,7 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "200"))
 # The reply is spoken in chunks; a chunk is flushed to TTS early once it passes
 # this many characters at a natural pause. Lower = the avatar starts talking
 # sooner, in smaller pieces.
-LLM_OPTION_SPLIT_THRESHOLD = int(os.getenv("LLM_OPTION_SPLIT_THRESHOLD", "24"))
+LLM_OPTION_SPLIT_THRESHOLD = int(os.getenv("LLM_OPTION_SPLIT_THRESHOLD", "50"))
 
 # --- Voice (ears and mouth) via OpenRouter's audio APIs ---
 STT_MODEL = os.getenv("STT_MODEL", "openai/gpt-4o-transcribe")

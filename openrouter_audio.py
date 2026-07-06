@@ -139,10 +139,12 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
         self.base_url = base_url.rstrip("/")
         self.pcm_sample_rate = pcm_sample_rate
         parts = []
-        if tts_style:  parts.append(f"Style: {tts_style}")
-        if tts_pace:   parts.append(f"Pacing: {tts_pace}")
-        if tts_accent: parts.append(f"Accent: {tts_accent}")
-        self._tts_prefix = "\n".join(parts) + "\n\n" if parts else ""
+        if tts_style:  parts.append(tts_style)
+        if tts_pace:   parts.append(tts_pace)
+        if tts_accent: parts.append(f"{tts_accent} accent")
+        self._tts_instruction = (
+            f"Speak in a {', '.join(parts)} tone.\n\n" if parts else ""
+        )
 
     def get_config(self) -> dict:
         config = super().get_config()
@@ -168,8 +170,15 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
             logger.info(f"Speech synthesize: {text}")
 
         processed_text = await self.preprocess(text, style_info, language)
-        if self._tts_prefix:
-            processed_text = self._tts_prefix + processed_text
+        if self._tts_instruction:
+            processed_text = self._tts_instruction + processed_text
+
+        # Gemini TTS returns empty audio for fragments that end mid-sentence
+        # (e.g. " I'm doing great, "). Strip trailing non-terminal punctuation
+        # so the TTS always gets a speakable chunk.
+        processed_text = processed_text.strip()
+        while processed_text and processed_text[-1] in (",", ";", ":", "-", "—"):
+            processed_text = processed_text[:-1].strip()
 
         url = f"{self.base_url}/audio/speech"
         headers = {"Authorization": f"Bearer {self.openrouter_api_key}"}
