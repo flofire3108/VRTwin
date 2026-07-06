@@ -112,6 +112,9 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
         voice: str = "Kore",
         base_url: str = OPENROUTER_BASE_URL,
         pcm_sample_rate: int = 24000,
+        tts_style: str = "",
+        tts_pace: str = "",
+        tts_accent: str = "",
         style_mapper: dict = None,
         max_connections: int = 100,
         max_keepalive_connections: int = 20,
@@ -135,6 +138,11 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
         self.voice = voice
         self.base_url = base_url.rstrip("/")
         self.pcm_sample_rate = pcm_sample_rate
+        parts = []
+        if tts_style:  parts.append(f"Style: {tts_style}")
+        if tts_pace:   parts.append(f"Pacing: {tts_pace}")
+        if tts_accent: parts.append(f"Accent: {tts_accent}")
+        self._tts_prefix = "\n".join(parts) + "\n\n" if parts else ""
 
     def get_config(self) -> dict:
         config = super().get_config()
@@ -160,6 +168,8 @@ class OpenRouterSpeechSynthesizer(SpeechSynthesizer):
             logger.info(f"Speech synthesize: {text}")
 
         processed_text = await self.preprocess(text, style_info, language)
+        if self._tts_prefix:
+            processed_text = self._tts_prefix + processed_text
 
         url = f"{self.base_url}/audio/speech"
         headers = {"Authorization": f"Bearer {self.openrouter_api_key}"}

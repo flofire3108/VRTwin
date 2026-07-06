@@ -41,7 +41,13 @@ class Setting:
 
 SECTIONS = ["Keys & Models", "Hearing & Voice", "Audio Devices", "VRChat", "Character", "Advanced"]
 
-GEMINI_VOICES = ["Kore", "Puck", "Zephyr", "Charon", "Fenrir", "Leda", "Orus", "Aoede"]
+GEMINI_VOICES = [
+    "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+    "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+    "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+    "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+    "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+]
 
 SETTINGS: List[Setting] = [
     # --- Keys & Models ---
@@ -66,6 +72,15 @@ SETTINGS: List[Setting] = [
     Setting("TTS_VOICE", "Kore", "choice", "Voice",
             "Which voice the avatar speaks with. Gemini prebuilt voices; type any other name your TTS model supports.",
             "Keys & Models", choices=GEMINI_VOICES),
+    Setting("TTS_STYLE", "", "text", "Voice style",
+            "Overall speaking style, e.g. 'warm and friendly' or 'energetic and upbeat'. Leave empty for neutral.",
+            "Keys & Models", placeholder="(neutral)"),
+    Setting("TTS_PACE", "", "text", "Voice pace",
+            "Speaking pace, e.g. 'slow and deliberate' or 'brisk energetic'. Leave empty for natural pace.",
+            "Keys & Models", placeholder="(natural)"),
+    Setting("TTS_ACCENT", "", "text", "Voice accent",
+            "Regional accent, e.g. 'American English' or 'British English from London'. Leave empty for model default.",
+            "Keys & Models", placeholder="(model default)"),
     Setting("STT_LANGUAGE", "en", "text", "Spoken language",
             "Language hint for speech recognition, e.g. en, nl, ja. Improves accuracy.",
             "Keys & Models"),

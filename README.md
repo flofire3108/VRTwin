@@ -182,8 +182,19 @@ Adjust these in the GUI (or in `.env` by hand — see `.env.example`):
   (closer to 0 = less sensitive, e.g. `-40`; more negative = more sensitive, e.g. `-60`).
   `VAD_SILENCE_DURATION_THRESHOLD` controls how long a pause has to be before
   the bot considers you done talking.
-- **Different voice** → `TTS_VOICE` — Gemini prebuilt voices like `Kore`, `Puck`,
-  `Zephyr`, `Charon`, `Fenrir`, `Leda`, `Orus`, `Aoede`.
+- **Different voice** → `TTS_VOICE` — any of the 30 Gemini prebuilt voices:
+  `Zephyr` (Bright), `Puck` (Upbeat), `Charon` (Informative), `Kore` (Firm),
+  `Fenrir` (Excitable), `Leda` (Youthful), `Orus` (Firm), `Aoede` (Breezy),
+  `Callirrhoe` (Easy-going), `Autonoe` (Bright), `Enceladus` (Breathy), `Iapetus` (Clear),
+  `Umbriel` (Easy-going), `Algieba` (Smooth), `Despina` (Smooth), `Erinome` (Clear),
+  `Algenib` (Gravelly), `Rasalgethi` (Informative), `Laomedeia` (Upbeat), `Achernar` (Soft),
+  `Alnilam` (Firm), `Schedar` (Even), `Gacrux` (Mature), `Pulcherrima` (Forward),
+  `Achird` (Friendly), `Zubenelgenubi` (Casual), `Vindemiatrix` (Gentle),
+  `Sadachbia` (Lively), `Sadaltager` (Knowledgeable), `Sulafat` (Warm).
+- **Voice style / pace / accent** → `TTS_STYLE`, `TTS_PACE`, `TTS_ACCENT` — optional
+  director's notes sent to Gemini TTS before each response, e.g.
+  `TTS_STYLE=warm and friendly`, `TTS_PACE=natural conversational pace`,
+  `TTS_ACCENT=American English`. Leave empty for model defaults.
 - **Personality** → `PERSONA`, `CHARACTER_NAME` and `OPENROUTER_TEMPERATURE`
   (higher = more varied replies).
 - **Smarter but slower replies** → `OPENROUTER_REASONING_ENABLED=true` turns
@@ -232,7 +243,7 @@ Adjust these in the GUI (or in `.env` by hand — see `.env.example`):
 - **401 errors** — your OpenRouter key is wrong or out of credits; everything
   (chat, transcription, speech) authenticates against `openrouter.ai`.
 - **Bot hears but stays silent** — run with `DEBUG=true` and check for TTS errors;
-  if the voice name is rejected, try another Gemini voice in `TTS_VOICE`.
+  if the voice name is rejected, try another Gemini voice in `TTS_VOICE` (see the full list in the Tuning section above).
 
 ## Notes
 

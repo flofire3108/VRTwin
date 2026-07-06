@@ -53,6 +53,9 @@ STT_MIN_DATA_LENGTH = int(os.getenv("STT_MIN_DATA_LENGTH", "4096"))
 STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "10.0"))
 TTS_MODEL = os.getenv("TTS_MODEL", "google/gemini-3.1-flash-tts-preview")
 TTS_VOICE = os.getenv("TTS_VOICE", "Kore")
+TTS_STYLE = os.getenv("TTS_STYLE", "").strip()
+TTS_PACE = os.getenv("TTS_PACE", "").strip()
+TTS_ACCENT = os.getenv("TTS_ACCENT", "").strip()
 # Gemini 3.1 Flash TTS outputs PCM at 24 kHz / 16-bit / mono.
 TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
 TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30.0"))
@@ -134,7 +137,7 @@ PERSONA = os.getenv("PERSONA", "").strip() or _DEFAULT_PERSONA
 
 
 def build_system_prompt() -> str:
-    """Persona + AIAvatarKit face-tag instructions for the configured expressions."""
+    """Persona + face-tag and voice-delivery instructions for the current TTS model."""
     face_names = [name for name in FACES.keys()]
     return (
         f"{PERSONA}\n\n"
@@ -145,7 +148,15 @@ def build_system_prompt() -> str:
         "Use the exact format [face:name]. Examples:\n"
         "[face:joy]Hey, welcome back! [face:fun]Wanna see something cool?\n"
         "[face:sorrow]Aw, that's rough...\n"
-        "Only use the faces listed above. Use them naturally - not in every sentence."
+        "Only use the faces listed above. Use them naturally - not in every sentence.\n\n"
+        "## Voice delivery\n"
+        "Shape how a sentence sounds by placing one delivery tag at its start. "
+        "Available tags: [amazed] [crying] [curious] [excited] [sighs] [gasp] "
+        "[giggles] [laughs] [mischievously] [panicked] [sarcastic] [serious] "
+        "[shouting] [tired] [trembling] [whispers]\n"
+        "Always write tags in English even when replying in another language. "
+        "Only tag when delivery clearly differs from neutral. Do not tag every sentence.\n"
+        "Example: [excited]Oh wow, that's so cool! [whispers]But keep this between us."
     )
 
 
