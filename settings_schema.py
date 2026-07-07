@@ -19,8 +19,8 @@ ENV_PATH = Path(__file__).parent / ".env"
 
 # Widget kinds understood by the GUI:
 #   text, secret, bool, int, float, float_optional (empty = auto),
-#   slider (min/max/step), choice (editable dropdown), multiline, json,
-#   device_in, device_out (audio device dropdowns)
+#   slider (min/max/step), choice (editable dropdown), select (strict dropdown),
+#   multiline, json, device_in, device_out (audio device dropdowns)
 
 
 @dataclass(frozen=True)
@@ -37,9 +37,14 @@ class Setting:
     unit: str = ""
     choices: List[str] = field(default_factory=list)
     placeholder: str = ""
+    # Platform ids this setting applies to; empty = every platform. The GUI
+    # shows/hides these rows when the Target platform dropdown changes.
+    platforms: List[str] = field(default_factory=list)
+    # For kind "json": required type of the mapping's values ("int" or "str").
+    json_value_type: str = "int"
 
 
-SECTIONS = ["Keys & Models", "Hearing & Voice", "Audio Devices", "VRChat", "Character", "Advanced"]
+SECTIONS = ["Keys & Models", "Hearing & Voice", "Audio Devices", "Platform", "Character", "Advanced"]
 
 GEMINI_VOICES = [
     "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
@@ -115,38 +120,59 @@ SETTINGS: List[Setting] = [
             "Hearing & Voice", placeholder="(disabled)"),
 
     # --- Audio Devices (defaults depend on the OS, see platform_defaults.py) ---
+    Setting("INPUT_MODE", platform_defaults.DEFAULT_INPUT_MODE, "select", "Hearing mode",
+            "loopback (Windows): tap the game's output device directly - no input cable needed. "
+            "device: record from the input device below like a microphone (required on macOS/Linux).",
+            "Audio Devices", choices=["loopback", "device"]),
+    Setting("LOOPBACK_DEVICE", "", "text", "Loopback of (output device)",
+            "Loopback mode only: name fragment of the OUTPUT device the game plays through. Empty = your default speakers.",
+            "Audio Devices", placeholder="(default speakers)"),
     Setting("INPUT_DEVICE", platform_defaults.DEFAULT_INPUT_DEVICE, "device_in",
             "Bot's ears (input device)",
-            platform_defaults.INPUT_DEVICE_HELP,
+            platform_defaults.INPUT_DEVICE_HELP + " Only used in 'device' hearing mode.",
             "Audio Devices"),
     Setting("OUTPUT_DEVICE", platform_defaults.DEFAULT_OUTPUT_DEVICE, "device_out",
             "Bot's mouth (output device)",
             platform_defaults.OUTPUT_DEVICE_HELP,
             "Audio Devices"),
 
-    # --- VRChat ---
-    Setting("OSC_HOST", "127.0.0.1", "text", "VRChat address (OSC host)",
-            "Where VRChat is running. Keep 127.0.0.1 when VRChat runs on this PC.",
-            "VRChat"),
-    Setting("OSC_PORT", "9000", "int", "VRChat OSC port",
-            "VRChat listens for OSC messages on this port. 9000 is VRChat's default.",
-            "VRChat"),
-    Setting("FACE_OSC_ADDRESS", "/avatar/parameters/FaceOSC", "text", "Expression parameter address",
-            "The avatar's synced int parameter that switches face animations. Must match your avatar's animator setup.",
-            "VRChat"),
+    # --- Platform (target game/app; the AI pipeline is the same everywhere) ---
+    Setting("PLATFORM", "vrchat", "select", "Target platform",
+            "Which game/app the avatar lives in. Expressions and chat are translated to whatever this platform expects; everything else works the same.",
+            "Platform", choices=["vrchat", "chilloutvr", "resonite", "vtubestudio"]),
     Setting("FACES", '{"neutral": 0, "joy": 1, "angry": 2, "sorrow": 3, "fun": 4, "surprise": 5}',
             "json", "Expressions (name -> value)",
-            "JSON mapping of expression names to the parameter values your avatar's animator expects. The AI is told exactly these names.",
-            "VRChat"),
+            "JSON mapping of expression names to values. The names are what the AI uses ([face:joy]) on every platform; the values are sent on OSC platforms.",
+            "Platform"),
     Setting("FACE_NEUTRAL_KEY", "neutral", "text", "Resting expression",
             "Which expression (from the list above) the avatar returns to after emoting.",
-            "VRChat"),
-    Setting("CHATBOX_ENABLED", "true", "bool", "Show replies in chatbox",
-            "Also displays every spoken reply as a VRChat chatbox bubble so players can read it.",
-            "VRChat"),
+            "Platform"),
+    Setting("CHATBOX_ENABLED", "true", "bool", "Show replies as chat",
+            "Also displays every spoken reply as text where the platform supports it (VRChat chatbox, Resonite chat address).",
+            "Platform", platforms=["vrchat", "resonite"]),
+    Setting("OSC_HOST", "127.0.0.1", "text", "Game address (OSC host)",
+            "Where the game is running. Keep 127.0.0.1 when it runs on this PC.",
+            "Platform", platforms=["vrchat", "chilloutvr", "resonite"]),
+    Setting("OSC_PORT", "9000", "int", "OSC port",
+            "The game listens for OSC messages on this port. 9000 is the default for VRChat and ChilloutVR.",
+            "Platform", platforms=["vrchat", "chilloutvr", "resonite"]),
+    Setting("FACE_OSC_ADDRESS", "/avatar/parameters/FaceOSC", "text", "Expression parameter address",
+            "The avatar's synced int parameter that switches face animations. Must match your avatar's animator setup (or your Resonite receiver).",
+            "Platform", platforms=["vrchat", "chilloutvr", "resonite"]),
     Setting("CHATBOX_MAX_LENGTH", "144", "int", "Chatbox character limit",
             "Replies are trimmed to this many characters for the chatbox. VRChat's limit is 144.",
-            "VRChat"),
+            "Platform", platforms=["vrchat"]),
+    Setting("RESONITE_CHAT_ADDRESS", "", "text", "Chat OSC address (Resonite)",
+            "Optional OSC address that receives each reply as a string, for an in-world subtitle receiver. Empty = off.",
+            "Platform", platforms=["resonite"], placeholder="(disabled)"),
+    Setting("VTS_WS_URL", "ws://127.0.0.1:8001", "text", "VTube Studio API address",
+            "VTube Studio's WebSocket API. Enable 'Start API' in VTS settings; 8001 is the default port.",
+            "Platform", platforms=["vtubestudio"]),
+    Setting("VTS_HOTKEYS", '{"neutral": "neutral", "joy": "joy", "angry": "angry", '
+            '"sorrow": "sorrow", "fun": "fun", "surprise": "surprise"}',
+            "json", "VTS hotkeys (face -> hotkey)",
+            "JSON mapping each expression name to the VTube Studio hotkey name (or unique ID) that triggers it. Create the hotkeys in VTS first.",
+            "Platform", platforms=["vtubestudio"], json_value_type="str"),
 
     # --- Character ---
     Setting("CHARACTER_NAME", "Twin", "text", "Character name",
@@ -154,7 +180,7 @@ SETTINGS: List[Setting] = [
             "Character"),
     Setting("PERSONA", "", "multiline", "Personality",
             "Describe who the AI is and how it talks. Empty = a friendly default persona based on the character name. Expression instructions are added automatically.",
-            "Character", placeholder="(auto: friendly VRChat persona)"),
+            "Character", placeholder="(auto: friendly default persona)"),
 
     # --- Advanced ---
     Setting("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1", "text", "OpenRouter base URL",
@@ -238,14 +264,18 @@ def validate(setting: Setting, value: str) -> Optional[str]:
         except ValueError:
             return f"{setting.label}: enter a number or leave empty for auto."
     elif setting.kind == "json":
+        value_type = int if setting.json_value_type == "int" else str
+        example = '{"neutral": 0, "joy": 1}' if value_type is int else '{"joy": "my hotkey"}'
         try:
             parsed = json.loads(value)
             if not isinstance(parsed, dict) or not parsed or not all(
-                isinstance(k, str) and isinstance(v, int) for k, v in parsed.items()
+                isinstance(k, str) and isinstance(v, value_type) for k, v in parsed.items()
             ):
                 raise ValueError
         except ValueError:
-            return f'{setting.label}: must be JSON like {{"neutral": 0, "joy": 1}}.'
+            return f"{setting.label}: must be JSON like {example}."
+    elif setting.kind == "select" and value not in setting.choices:
+        return f"{setting.label}: must be one of {', '.join(setting.choices)}."
     return None
 
 

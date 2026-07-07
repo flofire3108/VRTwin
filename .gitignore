@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 aiavatar.db
 recorded_voices/
+waiver_accepted.json
+vts_token.json

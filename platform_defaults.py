@@ -73,6 +73,11 @@ def defaults_for(platform: str) -> dict:
 
 _current = defaults_for(sys.platform)
 
+# Hearing mode: Windows can tap an output device directly (WASAPI loopback via
+# PyAudioWPatch) so no input cable is needed; other OSes record from a device
+# (Linux uses pulse monitor sources, macOS uses BlackHole).
+DEFAULT_INPUT_MODE = "loopback" if sys.platform.startswith("win") else "device"
+
 DEFAULT_INPUT_DEVICE = _current["input_device"]
 DEFAULT_OUTPUT_DEVICE = _current["output_device"]
 DEFAULT_PULSE_SOURCE = _current["pulse_source"]

@@ -49,7 +49,7 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "200"))
 # The reply is spoken in chunks; a chunk is flushed to TTS early once it passes
 # this many characters at a natural pause. Lower = the avatar starts talking
 # sooner, in smaller pieces.
-LLM_OPTION_SPLIT_THRESHOLD = int(os.getenv("LLM_OPTION_SPLIT_THRESHOLD", "50"))
+LLM_OPTION_SPLIT_THRESHOLD = int(os.getenv("LLM_OPTION_SPLIT_THRESHOLD", "24"))
 
 # --- Voice (ears and mouth) via OpenRouter's audio APIs ---
 STT_MODEL = os.getenv("STT_MODEL", "openai/gpt-4o-transcribe")
@@ -73,6 +73,13 @@ HTTP_MAX_CONNECTIONS = int(os.getenv("HTTP_MAX_CONNECTIONS", "100"))
 HTTP_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("HTTP_MAX_KEEPALIVE_CONNECTIONS", "20"))
 
 # --- Audio devices (virtual audio cables; defaults depend on the OS) ---
+# INPUT_MODE = how the bot LISTENS:
+#   "loopback" (Windows default): taps the game's output device directly via
+#     WASAPI loopback - no input cable needed. LOOPBACK_DEVICE picks which
+#     output to tap (name fragment; empty = the default speakers).
+#   "device": records from INPUT_DEVICE like a microphone (a virtual cable).
+INPUT_MODE = os.getenv("INPUT_MODE", platform_defaults.DEFAULT_INPUT_MODE).strip().lower()
+LOOPBACK_DEVICE = os.getenv("LOOPBACK_DEVICE", "").strip()
 # INPUT_DEVICE  = where the bot LISTENS  (the game's speaker output -> cable A)
 # OUTPUT_DEVICE = where the bot SPEAKS   (cable B -> the game's microphone)
 # Windows: VB-CABLE A/B. macOS: BlackHole 2ch/16ch. Linux: the "pulse" device,
@@ -112,7 +119,27 @@ HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "30"))
 # Forget conversation history older than this many seconds. 0 = no time limit.
 HISTORY_TIMEOUT_SECONDS = int(os.getenv("HISTORY_TIMEOUT_SECONDS", "3600"))
 
-# --- VRChat OSC ---
+# --- Target platform ---
+# Which game/app the avatar lives in: vrchat | chilloutvr | resonite | vtubestudio.
+# The AI pipeline is identical everywhere; only the expression/chat transport differs.
+PLATFORM = os.getenv("PLATFORM", "vrchat").strip().lower()
+
+# VTube Studio (PLATFORM=vtubestudio): WebSocket API endpoint and the mapping of
+# face names (FACES keys) to the VTS hotkey names/IDs that trigger them.
+VTS_WS_URL = os.getenv("VTS_WS_URL", "ws://127.0.0.1:8001")
+VTS_HOTKEYS = json.loads(
+    os.getenv(
+        "VTS_HOTKEYS",
+        '{"neutral": "neutral", "joy": "joy", "angry": "angry", '
+        '"sorrow": "sorrow", "fun": "fun", "surprise": "surprise"}',
+    )
+)
+
+# Resonite (PLATFORM=resonite): optional OSC address that receives each reply as
+# a string (for an in-world subtitle receiver). Empty = disabled.
+RESONITE_CHAT_ADDRESS = os.getenv("RESONITE_CHAT_ADDRESS", "").strip()
+
+# --- OSC (shared by VRChat / ChilloutVR / Resonite) ---
 OSC_HOST = os.getenv("OSC_HOST", "127.0.0.1")
 OSC_PORT = int(os.getenv("OSC_PORT", "9000"))
 FACE_OSC_ADDRESS = os.getenv("FACE_OSC_ADDRESS", "/avatar/parameters/FaceOSC")
@@ -141,7 +168,8 @@ _DEFAULT_PERSONA = (
     "loud through text-to-speech, so answer the way a person talks: casual, warm, "
     "and SHORT - one to three sentences. Never use markdown, lists, emoji, or "
     "stage directions. If you did not catch what someone said, just ask them to "
-    "repeat it."
+    "repeat it. If someone asks whether you are an AI or a bot, answer honestly "
+    "that you are an AI."
 )
 # Empty/unset means: use the friendly default persona above (the GUI relies on this).
 PERSONA = os.getenv("PERSONA", "").strip() or _DEFAULT_PERSONA

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+import legal
 import platform_defaults
 import settings_schema as schema
 
@@ -87,6 +88,10 @@ class SettingRow:
         elif s.kind == "choice":
             self.var = ctk.StringVar(value=initial)
             control = ctk.CTkComboBox(self.frame, values=s.choices, variable=self.var, width=280)
+        elif s.kind == "select":
+            self.var = ctk.StringVar(value=initial)
+            control = ctk.CTkOptionMenu(self.frame, values=s.choices, variable=self.var, width=280)
+            self.option_menu = control
         elif s.kind in ("device_in", "device_out"):
             self.var = ctk.StringVar(value=initial)
             control = ctk.CTkComboBox(self.frame, values=[initial], variable=self.var, width=420)
@@ -150,13 +155,15 @@ class VRTwinApp(ctk.CTk):
         self._refresh_devices()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(150, self._poll_log_queue)
+        if not legal.is_waiver_accepted():
+            self.after(250, self._show_waiver)
 
     # ---------- layout ----------
 
     def _build_layout(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=3)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(2, weight=3)
+        self.grid_rowconfigure(4, weight=1)
 
         # Top bar: run control + status
         top = ctk.CTkFrame(self)
@@ -166,26 +173,48 @@ class VRTwinApp(ctk.CTk):
         self.start_button.pack(side="left", padx=8, pady=8)
         self.status_label = ctk.CTkLabel(top, text="Stopped", anchor="w")
         self.status_label.pack(side="left", padx=8)
+        ctk.CTkButton(top, text="ⓘ  Notice", width=90,
+                      fg_color=("gray70", "gray30"), hover_color=("gray60", "gray25"),
+                      command=self._show_notice_banner).pack(side="right", padx=8, pady=8)
+
+        # Usage notice banner (dismissible per session, re-openable via ⓘ Notice)
+        self.notice_banner = ctk.CTkFrame(self, fg_color=("#8a6d1a", "#5c4a12"))
+        self.notice_banner.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 4))
+        self.notice_banner.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(self.notice_banner, text=f"⚠  {legal.NOTICE_TEXT}",
+                     font=ctk.CTkFont(size=12), anchor="w", justify="left",
+                     wraplength=880).grid(row=0, column=0, sticky="ew", padx=10, pady=6)
+        ctk.CTkButton(self.notice_banner, text="✕", width=28, height=24,
+                      fg_color="transparent", hover_color=("#a3831f", "#6e5916"),
+                      command=self.notice_banner.grid_remove).grid(row=0, column=1, padx=(0, 6))
 
         # Settings tabs
         values = schema.load_values()
         self.tabview = ctk.CTkTabview(self)
-        self.tabview.grid(row=1, column=0, sticky="nsew", padx=10, pady=4)
+        self.tabview.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
+        self.platform_frames = {}  # platform id -> frame with its scoped rows
         for section in schema.SECTIONS:
             tab = self.tabview.add(section)
             tab.grid_columnconfigure(0, weight=1)
             tab.grid_rowconfigure(0, weight=1)
             scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
             scroll.grid(row=0, column=0, sticky="nsew")
+            if section == "Platform":
+                self._build_platform_tab(scroll, values)
+                continue
             for setting in (s for s in schema.SETTINGS if s.section == section):
                 self.rows[setting.key] = SettingRow(scroll, setting, values[setting.key])
             if section == "Audio Devices":
-                ctk.CTkButton(scroll, text="↻  Refresh device lists", width=180,
-                              command=self._refresh_devices).pack(anchor="w", padx=12, pady=12)
+                buttons = ctk.CTkFrame(scroll, fg_color="transparent")
+                buttons.pack(anchor="w", padx=12, pady=12)
+                ctk.CTkButton(buttons, text="↻  Refresh device lists", width=180,
+                              command=self._refresh_devices).pack(side="left", padx=(0, 8))
+                ctk.CTkButton(buttons, text="⤓  Install VB-CABLE (official installer)", width=250,
+                              command=self._install_vbcable).pack(side="left")
 
         # Bottom bar: save / reset
         bottom = ctk.CTkFrame(self)
-        bottom.grid(row=2, column=0, sticky="ew", padx=10, pady=4)
+        bottom.grid(row=3, column=0, sticky="ew", padx=10, pady=4)
         ctk.CTkButton(bottom, text="\U0001f4be  Save settings", width=150,
                       command=self._save).pack(side="left", padx=8, pady=8)
         ctk.CTkButton(bottom, text="↩  Reset to defaults", width=160,
@@ -196,7 +225,7 @@ class VRTwinApp(ctk.CTk):
 
         # Log panel
         log_frame = ctk.CTkFrame(self)
-        log_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(4, 10))
+        log_frame.grid(row=4, column=0, sticky="nsew", padx=10, pady=(4, 10))
         log_frame.grid_columnconfigure(0, weight=1)
         log_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(log_frame, text="Avatar log", font=ctk.CTkFont(size=12, weight="bold"),
@@ -205,6 +234,123 @@ class VRTwinApp(ctk.CTk):
                                       font=ctk.CTkFont(family=platform_defaults.MONO_FONT, size=11))
         self.log_box.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         self.log_box.configure(state="disabled")
+
+    # ---------- platform tab ----------
+
+    def _build_platform_tab(self, scroll, values):
+        """Target-platform dropdown + setup instructions + rows that show/hide
+        depending on the selected platform."""
+        import platforms as platform_pkg
+
+        self._platform_classes = platform_pkg.CONTROLLER_CLASSES
+        platform_setting = next(s for s in schema.SETTINGS if s.key == "PLATFORM")
+        row = SettingRow(scroll, platform_setting, values["PLATFORM"])
+        self.rows["PLATFORM"] = row
+        row.option_menu.configure(command=lambda _value: self._on_platform_changed())
+
+        self.platform_instructions = ctk.CTkLabel(
+            scroll, text="", font=ctk.CTkFont(size=12), text_color=("#1f6aa5", "#7ab8e8"),
+            anchor="w", justify="left", wraplength=760)
+        self.platform_instructions.pack(fill="x", padx=12, pady=(8, 2))
+
+        self._scoped_rows = []
+        for setting in (s for s in schema.SETTINGS
+                        if s.section == "Platform" and s.key != "PLATFORM"):
+            setting_row = SettingRow(scroll, setting, values[setting.key])
+            self.rows[setting.key] = setting_row
+            if setting.platforms:
+                self._scoped_rows.append(setting_row)
+        self._on_platform_changed()
+
+    def _on_platform_changed(self):
+        platform_id = self.rows["PLATFORM"].get()
+        cls = self._platform_classes.get(platform_id)
+        if cls is not None:
+            self.platform_instructions.configure(
+                text=f"ⓘ {cls.display_name} setup:  {cls.setup_instructions}")
+        # Re-pack scoped rows in schema order so only the relevant ones show
+        for row in self._scoped_rows:
+            row.frame.pack_forget()
+        for row in self._scoped_rows:
+            if platform_id in row.setting.platforms:
+                row.frame.pack(fill="x", padx=12, pady=(10, 2))
+
+    # ---------- VB-CABLE ----------
+
+    def _install_vbcable(self):
+        import vbcable_installer
+
+        def work():
+            try:
+                if vbcable_installer.cable_present():
+                    self.log_queue.put("VB-CABLE is already installed - nothing to do.\n")
+                    return
+                launched = vbcable_installer.download_and_run_installer(
+                    log=lambda message: self.log_queue.put(f"{message}\n"))
+                if launched:
+                    self.after(0, lambda: self.rows["OUTPUT_DEVICE"].set("CABLE Input"))
+                    self.log_queue.put(
+                        "Set \"Bot's mouth\" to 'CABLE Input' - click Save settings to keep it. "
+                        "Remember: the cable only appears after a reboot.\n")
+            except Exception as ex:
+                self.log_queue.put(f"VB-CABLE install failed: {ex}\n")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    # ---------- legal ----------
+
+    def _show_notice_banner(self):
+        self.notice_banner.grid()
+
+    def _show_waiver(self):
+        """Mandatory click-through waiver on first launch (EULA.md)."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("VRTwin - License agreement")
+        dialog.geometry("720x560")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.protocol("WM_DELETE_WINDOW", self._decline_waiver)
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(dialog, text=legal.WAIVER_PROMPT, font=ctk.CTkFont(size=13, weight="bold"),
+                     anchor="w", justify="left", wraplength=680).grid(
+            row=0, column=0, sticky="ew", padx=14, pady=(12, 4))
+
+        text = ctk.CTkTextbox(dialog, wrap="word")
+        text.insert("1.0", legal.eula_text())
+        text.configure(state="disabled")
+        text.grid(row=1, column=0, sticky="nsew", padx=14, pady=6)
+
+        agree_var = ctk.StringVar(value="no")
+        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        buttons.grid(row=3, column=0, sticky="ew", padx=14, pady=(4, 12))
+
+        accept_button = ctk.CTkButton(buttons, text="Accept and continue", width=170,
+                                      state="disabled", command=lambda: self._accept_waiver(dialog))
+
+        def on_toggle():
+            accept_button.configure(state="normal" if agree_var.get() == "yes" else "disabled")
+
+        checkbox = ctk.CTkCheckBox(dialog, text="I have read and agree to these terms",
+                                   variable=agree_var, onvalue="yes", offvalue="no",
+                                   command=on_toggle)
+        checkbox.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 0))
+
+        accept_button.pack(side="right", padx=6)
+        ctk.CTkButton(buttons, text="Decline and quit", width=140,
+                      fg_color=("gray70", "gray30"), hover_color=("gray60", "gray25"),
+                      command=self._decline_waiver).pack(side="right", padx=6)
+        self.waiver_dialog = dialog
+
+    def _accept_waiver(self, dialog):
+        legal.record_waiver_acceptance()
+        dialog.grab_release()
+        dialog.destroy()
+        self.waiver_dialog = None
+
+    def _decline_waiver(self):
+        self.destroy()
 
     # ---------- settings ----------
 
@@ -232,6 +378,7 @@ class VRTwinApp(ctk.CTk):
             return
         for key, row in self.rows.items():
             row.set(row.setting.default)
+        self._on_platform_changed()  # PLATFORM may have changed back to the default
         self.save_label.configure(text="Defaults restored - click 'Save settings' to keep them.")
 
     def _refresh_devices(self):

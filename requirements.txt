@@ -4,3 +4,5 @@ aiavatar[local-audio]==0.8.18
 python-osc>=1.8
 python-dotenv>=1.0
 customtkinter>=6.0
+# Windows only: WASAPI loopback capture (hear the game without an input cable)
+PyAudioWPatch>=0.2.12 ; sys_platform == 'win32'

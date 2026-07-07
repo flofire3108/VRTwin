@@ -1,18 +1,18 @@
-"""VRTwin - run a VRChat account as an AI avatar.
+"""VRTwin - run an AI companion avatar in VRChat, ChilloutVR, Resonite or VTube Studio.
 
 Pipeline (all wired through AIAvatarKit, all AI on one OpenRouter key):
-  VRChat audio -> VB-CABLE A -> voice detection
+  game audio -> loopback capture or virtual cable -> voice detection
   -> OpenRouter STT (openai/gpt-4o-transcribe)
   -> Claude Sonnet 5 via OpenRouter (reasoning disabled)
   -> OpenRouter TTS (google/gemini-3.1-flash-tts-preview)
-  -> VB-CABLE B -> VRChat microphone
-  plus [face:...] tags -> OSC -> avatar expressions, and replies mirrored
-  to the VRChat chatbox.
+  -> virtual cable -> the game's microphone
+  plus [face:...] tags -> the selected platform controller (OSC or WebSocket)
+  -> avatar expressions, and replies mirrored to chat where supported.
 
 Usage:
   python main.py                 run the avatar
   python main.py --list-devices  print audio device indices/names
-  python main.py --text          console chat mode (no audio/VRChat needed)
+  python main.py --text          console chat mode (no audio/game needed)
 """
 
 import argparse
@@ -27,6 +27,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="aiavatar"
 from aiavatar.sts.llm.chatgpt import ChatGPTService
 
 import config
+import legal
 from context_manager import LimitedSQLiteContextManager
 
 
@@ -110,13 +111,15 @@ async def text_chat() -> None:
 
 
 async def run_avatar() -> None:
-    from pythonosc import udp_client
-
     from aiavatar.adapter.local.client import AIAvatar
     from aiavatar.device import AudioDevice
-    from aiavatar.face.vrchat import VRChatFaceController
 
     from openrouter_audio import OpenRouterSpeechRecognizer, OpenRouterSpeechSynthesizer
+    from platforms import ControllerFaceController, create_controller
+
+    # The platform controller is the only part that knows which game we target;
+    # the pipeline below is identical for every platform.
+    controller = create_controller(config)
 
     app = AIAvatar(
         llm=build_llm(),
@@ -147,12 +150,10 @@ async def run_avatar() -> None:
             cache_dir=config.TTS_CACHE_DIR,
             debug=config.DEBUG,
         ),
-        face_controller=VRChatFaceController(
-            osc_address=config.FACE_OSC_ADDRESS,
+        face_controller=ControllerFaceController(
+            controller,
             faces=config.FACES,
             neutral_key=config.FACE_NEUTRAL_KEY,
-            host=config.OSC_HOST,
-            port=config.OSC_PORT,
             debug=config.DEBUG,
         ),
         audio_devices=AudioDevice(
@@ -170,21 +171,32 @@ async def run_avatar() -> None:
     )
     app.charactername = config.CHARACTER_NAME
 
-    # Mirror every reply into the VRChat chatbox so players can also read it.
-    chatbox = udp_client.SimpleUDPClient(config.OSC_HOST, config.OSC_PORT)
+    # Loopback hearing: tap the game's output device directly (Windows, no cable).
+    if config.INPUT_MODE == "loopback":
+        from audio_capture import create_loopback_recorder
 
+        recorder = create_loopback_recorder(
+            target_sample_rate=config.AUDIO_SAMPLE_RATE,
+            device_name=config.LOOPBACK_DEVICE,
+        )
+        if recorder is not None:
+            app.audio_recorder = recorder
+
+    # Mirror every reply as chat/subtitle where the platform supports it.
     @app.on_response("final")
-    async def mirror_to_chatbox(response):
-        if config.CHATBOX_ENABLED and response.voice_text:
-            # /chatbox/input: [text, send immediately, no notification sound]
-            chatbox.send_message(
-                "/chatbox/input", [response.voice_text[: config.CHATBOX_MAX_LENGTH], True, False]
-            )
+    async def mirror_to_chat(response):
+        if config.CHATBOX_ENABLED and controller.supports_chat and response.voice_text:
+            await controller.send_chat(response.voice_text)
 
-    print(f"{config.CHARACTER_NAME} is live. Listening on '{config.INPUT_DEVICE}', "
-          f"speaking on '{config.OUTPUT_DEVICE}', OSC -> {config.OSC_HOST}:{config.OSC_PORT}. "
-          "Ctrl+C to stop.")
-    await app.start_listening()
+    await controller.connect()
+    hearing = f"loopback of '{config.LOOPBACK_DEVICE or 'default speakers'}'" \
+        if config.INPUT_MODE == "loopback" else f"'{config.INPUT_DEVICE}'"
+    print(f"{config.CHARACTER_NAME} is live on {controller.display_name}. "
+          f"Listening on {hearing}, speaking on '{config.OUTPUT_DEVICE}'. Ctrl+C to stop.")
+    try:
+        await app.start_listening()
+    finally:
+        await controller.disconnect()
 
 
 def main() -> None:
@@ -197,7 +209,12 @@ def main() -> None:
 
     if args.list_devices:
         list_devices()
-    elif args.text:
+        return
+
+    legal.require_waiver_cli()
+    print(f"NOTICE: {legal.NOTICE_TEXT}\n")
+
+    if args.text:
         asyncio.run(text_chat())
     else:
         try:
