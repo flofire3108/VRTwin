@@ -99,6 +99,9 @@ VAD_VOLUME_DB_THRESHOLD = float(os.getenv("VAD_VOLUME_DB_THRESHOLD", "-50"))
 VAD_SILENCE_DURATION_THRESHOLD = float(os.getenv("VAD_SILENCE_DURATION_THRESHOLD", "0.5"))
 # Ignore the bot's own voice coming back through the input device.
 CANCEL_ECHO = _get_bool("CANCEL_ECHO", True)
+# When False (default), new speech is silently dropped while the AI is busy
+# (processing or speaking). When True, speech passes through regardless.
+INTERRUPT_ENABLED = _get_bool("INTERRUPT_ENABLED", False)
 
 # Save every recognized utterance as a WAV file (useful for debugging STT/VAD).
 VOICE_RECORDER_ENABLED = _get_bool("VOICE_RECORDER_ENABLED", False)

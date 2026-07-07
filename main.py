@@ -142,21 +142,58 @@ async def text_chat() -> None:
             await mcp.stop()
 
 
+class StatusSTT:
+    """Wraps the STT recognizer to emit pipeline status before transcribing."""
+
+    def __new__(cls, **kwargs):
+        from openrouter_audio import OpenRouterSpeechRecognizer
+
+        class _StatusSTT(OpenRouterSpeechRecognizer):
+            async def transcribe(self, data: bytes) -> str:
+                print("STATUS:transcribing", flush=True)
+                return await super().transcribe(data)
+
+        return _StatusSTT(**kwargs)
+
+
+class VRTwinAvatar:
+    """Thin wrapper around AIAvatar that adds the interrupt gate."""
+
+    def __new__(cls, **kwargs):
+        from aiavatar.adapter.local.client import AIAvatar
+
+        class _VRTwinAvatar(AIAvatar):
+            def __init__(self, **kw):
+                super().__init__(**kw)
+                self._is_processing = False
+
+            @property
+            def _is_busy(self):
+                return self._is_processing or self.audio_player.is_playing
+
+            async def send_microphone_worker(self, session_id: str):
+                async for data in self.audio_recorder.start_stream():
+                    if not self.cancel_echo or not self.audio_player.is_playing:
+                        if config.INTERRUPT_ENABLED or not self._is_busy:
+                            await self.send_microphone_data(data, session_id)
+
+        return _VRTwinAvatar(**kwargs)
+
+
 async def run_avatar() -> None:
     from pythonosc import udp_client
 
-    from aiavatar.adapter.local.client import AIAvatar
     from aiavatar.device import AudioDevice
     from aiavatar.face.vrchat import VRChatFaceController
 
-    from openrouter_audio import OpenRouterSpeechRecognizer, OpenRouterSpeechSynthesizer
+    from openrouter_audio import OpenRouterSpeechSynthesizer
 
     llm = build_llm()
     mcp = await start_mcp(llm)
 
-    app = AIAvatar(
+    app = VRTwinAvatar(
         llm=llm,
-        stt=OpenRouterSpeechRecognizer(
+        stt=StatusSTT(
             openrouter_api_key=config.OPENROUTER_API_KEY,
             base_url=config.OPENROUTER_BASE_URL,
             model=config.STT_MODEL,
@@ -209,17 +246,45 @@ async def run_avatar() -> None:
     # Mirror every reply into the VRChat chatbox so players can also read it.
     chatbox = udp_client.SimpleUDPClient(config.OSC_HOST, config.OSC_PORT)
 
+    _speaking = False
+
+    @app.on_response("start")
+    async def mark_busy(response):
+        app._is_processing = True
+        print("STATUS:thinking", flush=True)
+
+    @app.on_response("chunk")
+    async def on_chunk(response):
+        nonlocal _speaking
+        if not _speaking and response.audio_data:
+            _speaking = True
+            print("STATUS:speaking", flush=True)
+
     @app.on_response("final")
     async def mirror_to_chatbox(response):
+        nonlocal _speaking
+        app._is_processing = False
+        _speaking = False
         if config.CHATBOX_ENABLED and response.voice_text:
             # /chatbox/input: [text, send immediately, no notification sound]
             chatbox.send_message(
                 "/chatbox/input", [response.voice_text[: config.CHATBOX_MAX_LENGTH], True, False]
             )
+        asyncio.create_task(_wait_for_idle())
+
+    async def _wait_for_idle():
+        for _ in range(10):
+            if app.audio_player.is_playing:
+                break
+            await asyncio.sleep(0.1)
+        while app.audio_player.is_playing:
+            await asyncio.sleep(0.1)
+        print("STATUS:listening", flush=True)
 
     print(f"{config.CHARACTER_NAME} is live. Listening on '{config.INPUT_DEVICE}', "
           f"speaking on '{config.OUTPUT_DEVICE}', OSC -> {config.OSC_HOST}:{config.OSC_PORT}. "
           "Ctrl+C to stop.")
+    print("STATUS:listening", flush=True)
     try:
         await app.start_listening()
     finally:

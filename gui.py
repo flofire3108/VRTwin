@@ -234,6 +234,9 @@ class VRTwinApp(ctk.CTk):
         self.start_button.pack(side="left", padx=8, pady=8)
         self.status_label = ctk.CTkLabel(top, text="Stopped", anchor="w")
         self.status_label.pack(side="left", padx=8)
+        self.pipeline_label = ctk.CTkLabel(top, text="", anchor="w",
+                                           font=ctk.CTkFont(size=13, weight="bold"))
+        self.pipeline_label.pack(side="left", padx=(16, 8))
 
         # Settings tabs
         values = schema.load_values()
@@ -423,6 +426,7 @@ class VRTwinApp(ctk.CTk):
                                     fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"],
                                     hover_color=ctk.ThemeManager.theme["CTkButton"]["hover_color"])
         self.status_label.configure(text="Stopped")
+        self.pipeline_label.configure(text="")
         self._append_log("--- Avatar stopped ---\n")
 
     def _read_process_output(self, process):
@@ -431,6 +435,17 @@ class VRTwinApp(ctk.CTk):
         process.wait()
         self.log_queue.put(None)  # sentinel: process ended
 
+    _PIPELINE_STATES = {
+        "listening":    ("Listening",       "#4CAF50"),
+        "transcribing": ("Transcribing...", "#FF9800"),
+        "thinking":     ("Thinking...",     "#2196F3"),
+        "speaking":     ("Speaking...",     "#9C27B0"),
+    }
+
+    def _update_pipeline_status(self, state: str):
+        text, color = self._PIPELINE_STATES.get(state, ("", "gray"))
+        self.pipeline_label.configure(text=text, text_color=color)
+
     def _poll_log_queue(self):
         try:
             while True:
@@ -438,6 +453,8 @@ class VRTwinApp(ctk.CTk):
                 if line is None:
                     if self.process is not None:
                         self._on_process_ended()
+                elif line.startswith("STATUS:"):
+                    self._update_pipeline_status(line.strip().split(":", 1)[1])
                 else:
                     self._append_log(line)
         except queue.Empty:
