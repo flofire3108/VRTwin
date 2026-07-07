@@ -112,6 +112,15 @@ HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "30"))
 # Forget conversation history older than this many seconds. 0 = no time limit.
 HISTORY_TIMEOUT_SECONDS = int(os.getenv("HISTORY_TIMEOUT_SECONDS", "3600"))
 
+# --- Tools (MCP) ---
+# Give the brain tools from MCP servers (web fetch/search, time, memory, files).
+MCP_ENABLED = _get_bool("MCP_ENABLED", True)
+# Which servers to run is configured in this JSON file (created with useful
+# defaults on first run). Same `mcpServers` format as Claude Desktop.
+MCP_CONFIG_PATH = os.getenv("MCP_CONFIG_PATH", "mcp_servers.json")
+# Seconds a single tool call may take before the brain is told it failed.
+MCP_TOOL_TIMEOUT = float(os.getenv("MCP_TOOL_TIMEOUT", "30.0"))
+
 # --- VRChat OSC ---
 OSC_HOST = os.getenv("OSC_HOST", "127.0.0.1")
 OSC_PORT = int(os.getenv("OSC_PORT", "9000"))

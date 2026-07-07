@@ -47,6 +47,9 @@ def build_llm() -> ChatGPTService:
         system_prompt=config.build_system_prompt(),
         temperature=config.OPENROUTER_TEMPERATURE,
         extra_body={"reasoning": {"enabled": config.OPENROUTER_REASONING_ENABLED}},
+        # aiavatar's tool filtering sends the OpenAI-only `allowed_tools` tool_choice,
+        # which non-OpenAI providers on OpenRouter reject.
+        enable_tool_filtering=False,
         context_manager=LimitedSQLiteContextManager(
             db_path=config.DB_CONNECTION_STR,
             context_timeout=config.HISTORY_TIMEOUT_SECONDS,
@@ -61,6 +64,29 @@ def build_llm() -> ChatGPTService:
         params["max_tokens"] = config.LLM_MAX_TOKENS
 
     return llm
+
+
+async def start_mcp(llm):
+    """Connect the configured MCP servers and hand their tools to the brain.
+    Returns the manager (stop it on shutdown), or None when MCP is off."""
+    if not config.MCP_ENABLED:
+        return None
+    from mcp_manager import MCPManager
+
+    mcp = MCPManager(config.MCP_CONFIG_PATH, tool_timeout=config.MCP_TOOL_TIMEOUT)
+    await mcp.start()
+    tool_names = mcp.register_tools(llm)
+    if tool_names:
+        llm.system_prompt += (
+            "\n\n## Tools\n"
+            f"You have these tools: {', '.join(tool_names)}. Use them whenever a "
+            "request needs live information, the web, the time, memory, or files. "
+            "Your replies are spoken out loud, so before calling a tool say one "
+            "short natural line like 'Let me check that.' and keep the answer "
+            "you give afterwards just as short as usual."
+        )
+        print(f"MCP: {len(tool_names)} tools from {len(mcp.sessions)} server(s) ready.")
+    return mcp
 
 
 def list_devices() -> None:
@@ -87,26 +113,33 @@ async def text_chat() -> None:
     """Type-to-chat console mode: tests the OpenRouter/Sonnet 5 pipeline and the
     [face:...] expression tags without VRChat or audio devices."""
     llm = build_llm()
+    mcp = await start_mcp(llm)
     context_id = "console"
     user_id = "console_user"
     print(f"Console chat with {config.CHARACTER_NAME} ({config.OPENROUTER_MODEL}). Ctrl+C to quit.")
-    while True:
-        try:
-            text = input("\nYou: ").strip()
-        except (EOFError, KeyboardInterrupt):
+    try:
+        while True:
+            try:
+                text = input("\nYou: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return
+            if not text:
+                continue
+            messages = await llm.compose_messages(context_id, user_id, text)
+            response_text = ""
+            print(f"{config.CHARACTER_NAME}: ", end="", flush=True)
+            async for chunk in llm.get_llm_stream_response(context_id, user_id, messages):
+                if chunk.tool_call and not chunk.tool_call.result:
+                    print(f"\n[tool: {chunk.tool_call.name}]", flush=True)
+                elif chunk.text:
+                    print(chunk.text, end="", flush=True)
+                    response_text += chunk.text
             print()
-            return
-        if not text:
-            continue
-        messages = await llm.compose_messages(context_id, user_id, text)
-        response_text = ""
-        print(f"{config.CHARACTER_NAME}: ", end="", flush=True)
-        async for chunk in llm.get_llm_stream_response(context_id, user_id, messages):
-            if chunk.text:
-                print(chunk.text, end="", flush=True)
-                response_text += chunk.text
-        print()
-        await llm.update_context(context_id, user_id, messages, response_text)
+            await llm.update_context(context_id, user_id, messages, response_text)
+    finally:
+        if mcp:
+            await mcp.stop()
 
 
 async def run_avatar() -> None:
@@ -118,8 +151,11 @@ async def run_avatar() -> None:
 
     from openrouter_audio import OpenRouterSpeechRecognizer, OpenRouterSpeechSynthesizer
 
+    llm = build_llm()
+    mcp = await start_mcp(llm)
+
     app = AIAvatar(
-        llm=build_llm(),
+        llm=llm,
         stt=OpenRouterSpeechRecognizer(
             openrouter_api_key=config.OPENROUTER_API_KEY,
             base_url=config.OPENROUTER_BASE_URL,
@@ -184,7 +220,11 @@ async def run_avatar() -> None:
     print(f"{config.CHARACTER_NAME} is live. Listening on '{config.INPUT_DEVICE}', "
           f"speaking on '{config.OUTPUT_DEVICE}', OSC -> {config.OSC_HOST}:{config.OSC_PORT}. "
           "Ctrl+C to stop.")
-    await app.start_listening()
+    try:
+        await app.start_listening()
+    finally:
+        if mcp:
+            await mcp.stop()
 
 
 def main() -> None:

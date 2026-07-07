@@ -153,6 +153,8 @@ Everything is configured and run from the GUI — no file editing needed:
   - **VRChat** — OSC address/port, the expression parameter, the expressions JSON,
     the chatbox toggle and character limit.
   - **Character** — the AI's name and personality.
+  - **Tools** — the tools (MCP) switch, the tool timeout, and the MCP server
+    editor (see [Tools (MCP)](#tools-mcp) below).
   - **Advanced** — HTTP tuning, history file, voice recorder, debug logging.
 - **💾 Save settings** — validates everything and writes it to `.env` (only values
   you changed are stored).
@@ -173,6 +175,30 @@ python main.py --text           REM chat with the AI in the console - tests your
 
 `run.bat`/`./run.sh` with any argument (e.g. `run.bat --text` or `./run.sh --text`)
 also runs the CLI instead of the GUI.
+
+## Tools (MCP)
+
+The AI can use tools from [MCP](https://modelcontextprotocol.io) servers. Out of
+the box it gets (configured in `mcp_servers.json`, created on first run):
+
+- **fetch** — read a web page the players mention.
+- **search** — search the web via DuckDuckGo (no API key needed).
+- **time** — the current time and timezone conversions.
+- **memory** — a persistent knowledge graph, so it remembers players across
+  sessions (stored in `mcp_workspace/memory.json`). Needs Node.js.
+- **filesystem** — read/write files, sandboxed to the `mcp_workspace/` folder.
+  Needs Node.js.
+
+The fetch/search/time servers are Python and installed with everything else;
+memory and filesystem run via `npx` and are skipped automatically (with a log
+line) when Node.js is not installed. A server that fails to start never stops
+the avatar - it just comes up without those tools.
+
+Add or edit servers on the **Tools** tab of the control panel (name, command,
+arguments, environment, per-server on/off), or edit `mcp_servers.json` directly -
+it uses the same `mcpServers` format as Claude Desktop, plus an `"enabled"` flag.
+`"command": "python"` always means VRTwin's own venv Python. Turn all tools off
+with the switch on the Tools tab (`MCP_ENABLED=false`).
 
 ## Tuning
 

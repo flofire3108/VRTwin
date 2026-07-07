@@ -4,3 +4,7 @@ aiavatar[local-audio]==0.8.18
 python-osc>=1.8
 python-dotenv>=1.0
 customtkinter>=6.0
+mcp>=1.0
+mcp-server-fetch
+mcp-server-time
+duckduckgo-mcp-server

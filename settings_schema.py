@@ -39,7 +39,7 @@ class Setting:
     placeholder: str = ""
 
 
-SECTIONS = ["Keys & Models", "Hearing & Voice", "Audio Devices", "VRChat", "Character", "Advanced"]
+SECTIONS = ["Keys & Models", "Hearing & Voice", "Audio Devices", "VRChat", "Character", "Tools", "Advanced"]
 
 GEMINI_VOICES = [
     "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
@@ -156,7 +156,18 @@ SETTINGS: List[Setting] = [
             "Describe who the AI is and how it talks. Empty = a friendly default persona based on the character name. Expression instructions are added automatically.",
             "Character", placeholder="(auto: friendly VRChat persona)"),
 
+    # --- Tools (MCP) ---
+    Setting("MCP_ENABLED", "true", "bool", "Enable tools (MCP)",
+            "Gives the AI tools from the MCP servers below: fetch web pages, search the web, tell the time, remember things, and read/write files in its workspace folder.",
+            "Tools"),
+    Setting("MCP_TOOL_TIMEOUT", "30.0", "float", "Tool call timeout",
+            "Seconds a single tool call may take before the AI is told it failed.",
+            "Tools", unit="s"),
+
     # --- Advanced ---
+    Setting("MCP_CONFIG_PATH", "mcp_servers.json", "text", "MCP servers file",
+            "JSON file listing the MCP servers (same format as Claude Desktop). The Tools tab edits this file.",
+            "Advanced"),
     Setting("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1", "text", "OpenRouter base URL",
             "API endpoint for all OpenRouter calls. Only change for a proxy or compatible gateway.",
             "Advanced"),

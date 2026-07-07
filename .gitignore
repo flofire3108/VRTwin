@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 aiavatar.db
 recorded_voices/
+mcp_servers.json
+mcp_workspace/

@@ -10,6 +10,7 @@ Run with:  python gui.py
 
 import json
 import queue
+import shlex
 import subprocess
 import sys
 import threading
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+import mcp_manager
 import platform_defaults
 import settings_schema as schema
 
@@ -135,6 +137,72 @@ class SettingRow:
             self.device_box.configure(values=names)
 
 
+class MCPServerRow:
+    """Editor card for one MCP server: enable switch, name, command, arguments
+    and environment, plus a remove button."""
+
+    def __init__(self, parent, name: str, entry: dict, on_remove):
+        self.frame = ctk.CTkFrame(parent)
+        self.frame.pack(fill="x", padx=12, pady=6)
+        self.frame.grid_columnconfigure(1, weight=1)
+
+        self.enabled_var = ctk.StringVar(value="true" if entry.get("enabled", True) else "false")
+        ctk.CTkSwitch(self.frame, text="", width=46, variable=self.enabled_var,
+                      onvalue="true", offvalue="false").grid(row=0, column=0, padx=(10, 0), pady=(8, 2))
+        self.name_var = ctk.StringVar(value=name)
+        ctk.CTkEntry(self.frame, textvariable=self.name_var, width=200,
+                     placeholder_text="name", font=ctk.CTkFont(size=13, weight="bold")
+                     ).grid(row=0, column=1, sticky="w", pady=(8, 2))
+        ctk.CTkButton(self.frame, text="Remove", width=80,
+                      fg_color=("gray70", "gray30"), hover_color=("gray60", "gray25"),
+                      command=lambda: on_remove(self)).grid(row=0, column=2, padx=10, pady=(8, 2))
+
+        self.command_var = ctk.StringVar(value=entry.get("command", ""))
+        self.args_var = ctk.StringVar(value=shlex.join(entry.get("args", [])))
+        self.env_var = ctk.StringVar(value=json.dumps(entry["env"]) if entry.get("env") else "")
+        for row, (label, var, placeholder) in enumerate([
+            ("Command", self.command_var, "python, npx, or a full path"),
+            ("Arguments", self.args_var, "-m mcp_server_time"),
+            ("Env (JSON)", self.env_var, '{"KEY": "value"} - usually empty'),
+        ], start=1):
+            ctk.CTkLabel(self.frame, text=label, font=ctk.CTkFont(size=11),
+                         text_color=HELP_COLOR, anchor="e", width=80
+                         ).grid(row=row, column=0, padx=(10, 6), pady=1, sticky="e")
+            ctk.CTkEntry(self.frame, textvariable=var, placeholder_text=placeholder
+                         ).grid(row=row, column=1, columnspan=2, sticky="ew",
+                                padx=(0, 10), pady=(1, 8 if row == 3 else 1))
+
+    def get(self):
+        """Returns ((name, entry), error): the config entry, or what is wrong."""
+        name = self.name_var.get().strip()
+        if not name:
+            return None, "Every MCP server needs a name."
+        command = self.command_var.get().strip()
+        if not command:
+            return None, f"MCP server '{name}': enter a command."
+        try:
+            args = shlex.split(self.args_var.get().strip())
+        except ValueError as ex:
+            return None, f"MCP server '{name}': bad arguments ({ex})."
+        entry = {"command": command, "args": args, "enabled": self.enabled_var.get() == "true"}
+        env_text = self.env_var.get().strip()
+        if env_text:
+            try:
+                env = json.loads(env_text)
+                if not isinstance(env, dict) or not all(
+                    isinstance(k, str) and isinstance(v, str) for k, v in env.items()
+                ):
+                    raise ValueError
+            except ValueError:
+                return None, f'MCP server \'{name}\': env must be JSON like {{"KEY": "value"}}.'
+            if env:
+                entry["env"] = env
+        return (name, entry), None
+
+    def destroy(self):
+        self.frame.destroy()
+
+
 class VRTwinApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -182,6 +250,8 @@ class VRTwinApp(ctk.CTk):
             if section == "Audio Devices":
                 ctk.CTkButton(scroll, text="↻  Refresh device lists", width=180,
                               command=self._refresh_devices).pack(anchor="w", padx=12, pady=12)
+            if section == "Tools":
+                self._build_mcp_editor(scroll, values)
 
         # Bottom bar: save / reset
         bottom = ctk.CTkFrame(self)
@@ -206,6 +276,68 @@ class VRTwinApp(ctk.CTk):
         self.log_box.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         self.log_box.configure(state="disabled")
 
+    # ---------- MCP server editor ----------
+
+    def _build_mcp_editor(self, parent, values: dict):
+        self.mcp_rows: list[MCPServerRow] = []
+        ctk.CTkLabel(parent, text="MCP servers", font=ctk.CTkFont(size=13, weight="bold"),
+                     anchor="w").pack(fill="x", padx=12, pady=(16, 0))
+        ctk.CTkLabel(parent,
+                     text="Each server below is a small program that gives the AI tools. "
+                          "'python' runs in this app's environment; 'npx' servers need Node.js "
+                          "installed and are skipped automatically without it. Saved to "
+                          "the MCP servers file together with the settings.",
+                     font=ctk.CTkFont(size=11), text_color=HELP_COLOR, anchor="w",
+                     justify="left", wraplength=760).pack(fill="x", padx=12, pady=(2, 4))
+        self.mcp_list = ctk.CTkFrame(parent, fg_color="transparent")
+        self.mcp_list.pack(fill="x")
+        try:
+            servers = mcp_manager.load_servers(self._mcp_config_path(values))
+        except (OSError, json.JSONDecodeError) as ex:
+            messagebox.showerror("MCP servers", f"Could not read the MCP servers file:\n{ex}", parent=self)
+            servers = {}
+        for name, entry in servers.items():
+            self._add_mcp_row(name, entry)
+        buttons = ctk.CTkFrame(parent, fg_color="transparent")
+        buttons.pack(fill="x", padx=12, pady=(4, 12))
+        ctk.CTkButton(buttons, text="+  Add server", width=140,
+                      command=lambda: self._add_mcp_row("", {})).pack(side="left")
+        ctk.CTkButton(buttons, text="↩  Restore default servers", width=200,
+                      fg_color=("gray70", "gray30"), hover_color=("gray60", "gray25"),
+                      command=self._restore_default_mcp_servers).pack(side="left", padx=8)
+
+    def _mcp_config_path(self, values: dict) -> Path:
+        path = Path(values.get("MCP_CONFIG_PATH", "mcp_servers.json"))
+        return path if path.is_absolute() else APP_DIR / path
+
+    def _add_mcp_row(self, name: str, entry: dict):
+        self.mcp_rows.append(MCPServerRow(self.mcp_list, name, entry, self._remove_mcp_row))
+
+    def _remove_mcp_row(self, row: MCPServerRow):
+        row.destroy()
+        self.mcp_rows.remove(row)
+
+    def _restore_default_mcp_servers(self):
+        for row in self.mcp_rows:
+            row.destroy()
+        self.mcp_rows.clear()
+        for name, entry in mcp_manager.default_servers().items():
+            self._add_mcp_row(name, entry)
+
+    def _collect_mcp(self):
+        """Returns (servers dict, error list) from the editor rows."""
+        servers, errors = {}, []
+        for row in self.mcp_rows:
+            result, error = row.get()
+            if error:
+                errors.append(error)
+                continue
+            name, entry = result
+            if name in servers:
+                errors.append(f"MCP server '{name}': the name is used twice.")
+            servers[name] = entry
+        return servers, errors
+
     # ---------- settings ----------
 
     def _collect(self) -> dict:
@@ -213,11 +345,13 @@ class VRTwinApp(ctk.CTk):
 
     def _save(self) -> bool:
         values = self._collect()
-        errors = schema.validate_all(values)
+        mcp_servers, errors = self._collect_mcp()
+        errors = schema.validate_all(values) + errors
         if errors:
             messagebox.showerror("Invalid settings", "\n".join(errors), parent=self)
             return False
         schema.save_values(values)
+        mcp_manager.save_servers(mcp_servers, self._mcp_config_path(values))
         note = " Restart the avatar to apply." if self.process else ""
         self.save_label.configure(text=f"Saved to .env.{note}")
         return True
@@ -226,12 +360,14 @@ class VRTwinApp(ctk.CTk):
         if not messagebox.askyesno(
             "Reset to defaults",
             "Set every option back to its default value?\n\n"
-            "Your API key is cleared too. Nothing is saved until you click 'Save settings'.",
+            "Your API key is cleared and the default MCP servers are restored too. "
+            "Nothing is saved until you click 'Save settings'.",
             parent=self,
         ):
             return
         for key, row in self.rows.items():
             row.set(row.setting.default)
+        self._restore_default_mcp_servers()
         self.save_label.configure(text="Defaults restored - click 'Save settings' to keep them.")
 
     def _refresh_devices(self):
